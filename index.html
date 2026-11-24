@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Shop Time Clock</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#111418">
+<meta name="theme-color" content="#0a0a0b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,123 +13,149 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
+  /* 2W Diesel look: near-black, charcoal panels, safety orange */
   :root {
-    --bg: #111418; --card: #1b2027; --card2: #232a33; --line: #2e3640;
-    --text: #eef1f4; --muted: #8d98a5; --green: #22c55e; --green-d: #15803d;
-    --red: #ef4444; --red-d: #b91c1c; --amber: #f59e0b; --blue: #3b82f6;
-    --r: 16px;
+    --bg: #0a0a0b; --card: #121214; --card2: #1c1c1f; --line: rgba(255,255,255,.10); --line2: rgba(255,255,255,.18);
+    --text: #f6f5f3; --muted: #9a9a98; --accent: #f4621f; --accent-h: #ff7d33; --accent-soft: rgba(244,98,31,.14);
+    --green: #22c55e; --green-d: #15803d; --red: #ef4444; --red-d: #b91c1c; --amber: #f59e0b;
+    --r: 6px;
+    --head: "Oswald", system-ui, sans-serif; --body: "Barlow", system-ui, sans-serif; --mono: "Space Mono", ui-monospace, monospace;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; background: var(--bg); color: var(--text);
-    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  body { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); min-height: 100vh; }
-  #app { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 var(--body); }
+  body { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); min-height: 100vh;
+    background-image: linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px);
+    background-size: 26px 26px; }
+  #app { max-width: 560px; margin: 0 auto; padding: 14px 16px 48px; }
   button { font: inherit; color: inherit; border: 0; cursor: pointer; }
-  input { font: inherit; }
-  .top { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 16px; }
-  .top h1 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 0; letter-spacing: .3px; text-transform: uppercase; }
-  .top .who { font-size: 22px; font-weight: 700; color: var(--text); text-transform: none; letter-spacing: 0; }
-  .card { background: var(--card); border-radius: var(--r); padding: 16px; margin-bottom: 14px; }
+  input, select { font: inherit; }
+  h2 { font-family: var(--head); text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
+
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand img { height: 46px; width: auto; flex: none; }
+  .eyebrow { font: 700 11px var(--mono); color: var(--accent); letter-spacing: 1.5px; text-transform: uppercase; }
+  .who { font: 600 24px/1.1 var(--head); text-transform: uppercase; color: var(--text); letter-spacing: .3px; }
+  .who .acc { color: var(--accent); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; margin-bottom: 14px; }
   .muted { color: var(--muted); }
   .small { font-size: 13px; }
   .row { display: flex; align-items: center; gap: 10px; }
   .grow { flex: 1; min-width: 0; }
   .center { text-align: center; }
+  .lbl, label.lbl { display: block; font: 700 11px var(--mono); color: var(--muted); letter-spacing: 1.2px; text-transform: uppercase; margin: 0 0 6px 2px; }
 
   .banner { display: flex; gap: 12px; align-items: center; border-radius: var(--r); padding: 12px 14px;
-    margin-bottom: 14px; background: #1e293b; border: 1px solid #334155; }
-  .banner.warn { background: #3a2a0a; border-color: #78501a; }
-  .banner .grow > b { display: block; }
-  .btn { background: var(--card2); border-radius: 12px; padding: 12px 16px; font-weight: 600; }
-  .btn.sm { padding: 8px 12px; font-size: 14px; border-radius: 10px; }
-  .btn.blue { background: var(--blue); }
-  .btn.green { background: var(--green-d); }
-  .btn.red { background: var(--red-d); }
-  .btn.ghost { background: transparent; border: 1px solid var(--line); }
+    margin-bottom: 14px; background: var(--card); border: 1px solid var(--line2); }
+  .banner.warn { background: var(--accent-soft); border-color: rgba(244,98,31,.45); }
+  .banner .grow > b { display: block; font-family: var(--head); text-transform: uppercase; letter-spacing: .3px; font-weight: 600; }
+  .btn { background: var(--card2); border: 1px solid var(--line2); border-radius: var(--r); padding: 12px 16px;
+    font: 700 14px var(--head); text-transform: uppercase; letter-spacing: .6px; }
+  .btn.sm { padding: 8px 12px; font-size: 13px; }
+  .btn.blue, .btn.green { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.blue:active, .btn.green:active { background: var(--accent-h); }
+  .btn.red { background: var(--red-d); border-color: var(--red-d); color: #fff; }
+  .btn.ghost { background: transparent; }
   .btn.block { display: block; width: 100%; }
   .btn:disabled { opacity: .5; }
 
-  .clock { text-align: center; padding: 22px 16px 20px; }
-  .bigbtn { width: 210px; height: 210px; border-radius: 50%; font-size: 26px; font-weight: 800;
-    letter-spacing: .5px; color: #fff; display: inline-flex; flex-direction: column; align-items: center;
-    justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,.35); transition: transform .08s; }
+  .clock { text-align: center; padding: 24px 16px 20px; }
+  .bigbtn { width: 210px; height: 210px; border-radius: 50%; font: 700 30px var(--head); text-transform: uppercase;
+    letter-spacing: 1px; display: inline-flex; flex-direction: column; align-items: center;
+    justify-content: center; box-shadow: 0 10px 34px rgba(0,0,0,.5); transition: transform .08s; }
   .bigbtn:active { transform: scale(.96); }
-  .bigbtn.in { background: radial-gradient(circle at 30% 25%, #34d399, var(--green-d)); }
-  .bigbtn.out { background: radial-gradient(circle at 30% 25%, #f87171, var(--red-d)); }
-  .bigbtn small { font-size: 13px; font-weight: 500; opacity: .9; margin-top: 4px; letter-spacing: 0; }
+  .bigbtn.in { background: radial-gradient(circle at 30% 25%, var(--accent-h), #c94a10); color: #fff; box-shadow: 0 10px 40px rgba(244,98,31,.35); }
+  .bigbtn.out { background: radial-gradient(circle at 30% 25%, #ffffff, #d8d6d2); color: #16140f; }
+  .bigbtn small { font: 400 12px var(--mono); opacity: .85; margin-top: 6px; letter-spacing: .5px; text-transform: none; }
   .status { margin-top: 14px; font-size: 15px; }
-  .status b { font-size: 20px; }
+  .status b { font: 600 22px var(--head); color: var(--accent); }
 
   .weekhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .arrow { width: 40px; height: 40px; border-radius: 10px; background: var(--card2); font-size: 20px; }
+  .arrow { width: 40px; height: 40px; border-radius: var(--r); background: var(--card2); border: 1px solid var(--line2); font-size: 20px; }
   .arrow:disabled { opacity: .3; }
   .wtitle { text-align: center; }
-  .wtitle b { display: block; font-size: 17px; }
+  .wtitle b { display: block; font: 600 18px var(--head); text-transform: uppercase; letter-spacing: .3px; }
+  .wtitle span { font-family: var(--mono); font-size: 12px; }
   .total { text-align: center; margin: 10px 0 6px; }
-  .total .num { font-size: 40px; font-weight: 800; letter-spacing: -1px; }
-  .total .unit { color: var(--muted); font-size: 16px; margin-left: 4px; }
+  .total .num { font: 700 46px/1 var(--head); letter-spacing: 0; }
+  .total .unit { color: var(--muted); font: 400 14px var(--mono); margin-left: 6px; }
   .day { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent;
     padding: 12px 4px; border-top: 1px solid var(--line); }
-  .day .dname { width: 82px; font-weight: 600; }
-  .day .dname span { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+  .day .dname { width: 82px; font: 600 16px var(--head); text-transform: uppercase; }
+  .day .dname span { display: block; font: 400 11px var(--mono); color: var(--muted); text-transform: none; }
   .day .chips { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; font-size: 13px; color: var(--muted); }
-  .chip { background: var(--card2); border-radius: 8px; padding: 3px 7px; color: var(--text); white-space: nowrap; }
-  .chip.open { background: #14532d; }
-  .day .dt { font-weight: 700; min-width: 48px; text-align: right; }
-  .day.today .dname { color: var(--green); }
+  .chip { background: var(--card2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 7px; color: var(--text); white-space: nowrap; font-family: var(--mono); font-size: 12px; }
+  .chip.open { background: var(--accent-soft); border-color: rgba(244,98,31,.5); color: var(--accent-h); }
+  .day .dt { font: 600 17px var(--head); min-width: 48px; text-align: right; }
+  .day.today .dname { color: var(--accent); }
   .day .chev { color: var(--muted); }
   .day.locked .chev { visibility: hidden; }
   .submitted { color: var(--green); font-weight: 600; }
 
-  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
-  .pill.ok { background: #14532d; color: #86efac; }
-  .pill.no { background: #451a03; color: #fcd34d; }
-  .pill.on { background: #1e3a8a; color: #bfdbfe; }
+  .pill { display: inline-block; font: 700 10px var(--mono); padding: 3px 8px; border-radius: 3px; letter-spacing: .8px; text-transform: uppercase; }
+  .pill.ok { background: rgba(34,197,94,.14); color: #86efac; }
+  .pill.no { background: var(--accent-soft); color: var(--accent-h); }
+  .pill.on { background: rgba(255,255,255,.08); color: var(--text); border: 1px solid var(--line2); }
   .pill.off { background: var(--card2); color: var(--muted); }
 
-  .tabs { display: flex; background: var(--card); border-radius: 12px; padding: 4px; margin-bottom: 14px; }
-  .tabs button { flex: 1; padding: 10px; border-radius: 9px; background: transparent; font-weight: 600; color: var(--muted); }
-  .tabs button.on { background: var(--card2); color: var(--text); }
+  .tabs { display: flex; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 4px; margin-bottom: 14px; }
+  .tabs button { flex: 1; padding: 10px 6px; border-radius: 4px; background: transparent; font: 600 14px var(--head);
+    text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  .tabs button.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+  .shopbar { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 10px; scrollbar-width: none; }
+  .shopbar button { flex: 1 0 auto; padding: 9px 14px; border-radius: var(--r); background: var(--card); border: 1px solid var(--line2);
+    font: 700 12px var(--mono); letter-spacing: 1px; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .shopbar button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   .emp { display: flex; align-items: center; gap: 10px; width: 100%; background: transparent; text-align: left;
     padding: 14px 4px; border-top: 1px solid var(--line); }
   .emp:first-child { border-top: 0; }
-  .emp .hrs { font-weight: 800; font-size: 18px; text-align: right; }
-  .emp .hrs small { display: block; font-size: 11px; font-weight: 600; color: var(--amber); }
+  .emp b { font: 600 17px var(--head); text-transform: uppercase; letter-spacing: .2px; }
+  .emp .hrs { font: 700 20px var(--head); text-align: right; }
+  .emp .hrs small { display: block; font: 700 10px var(--mono); color: var(--accent); }
 
-  .field { display: block; width: 100%; background: var(--card2); border: 1px solid var(--line); color: var(--text);
-    border-radius: 12px; padding: 13px 14px; font-size: 17px; }
-  .field:focus { outline: 2px solid var(--blue); border-color: transparent; }
-  label.lbl { display: block; font-size: 13px; color: var(--muted); margin: 0 0 6px 2px; }
+  .field { display: block; width: 100%; background: var(--bg); border: 1px solid var(--line2); color: var(--text);
+    border-radius: var(--r); padding: 13px 14px; font-size: 17px; }
+  .field:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  select.field { -webkit-appearance: none; appearance: none; }
 
   /* Bottom sheet */
-  #shade { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 10; }
+  #shade { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; z-index: 10; }
   #sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 92vh; overflow: auto; z-index: 11;
-    background: var(--card); border-radius: 20px 20px 0 0; padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
+    background: var(--card); border-top: 2px solid var(--accent); border-radius: 10px 10px 0 0; padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
     transform: translateY(105%); transition: transform .22s ease; max-width: 560px; margin: 0 auto; }
   #sheet:not(.open) { visibility: hidden; transition: transform .22s ease, visibility 0s .22s; }
   #sheet.open { transform: none; }
   .sheethead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .sheethead h2 { margin: 0; font-size: 20px; }
-  .x { width: 36px; height: 36px; border-radius: 50%; background: var(--card2); font-size: 18px; }
+  .sheethead h2 { margin: 0; font-size: 22px; }
+  .x { width: 36px; height: 36px; border-radius: 50%; background: var(--card2); border: 1px solid var(--line2); font-size: 16px; }
   .entry { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .entry input[type=time] { flex: 1; min-width: 0; background: var(--card2); border: 1px solid var(--line); color: var(--text);
-    border-radius: 12px; padding: 12px 8px; font-size: 18px; text-align: center; -webkit-appearance: none; min-height: 50px; }
-  .entry .dash { color: var(--muted); }
-  .del { width: 44px; height: 50px; border-radius: 12px; background: #3b1515; color: #fca5a5; font-size: 18px; }
+  .entry input[type=time] { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line2); color: var(--text);
+    border-radius: var(--r); padding: 12px 8px; font: 18px var(--mono); text-align: center; -webkit-appearance: none; min-height: 50px; color-scheme: dark; }
+  .entry .dash { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .del { width: 44px; height: 50px; border-radius: var(--r); background: #2a1410; border: 1px solid #5a2414; color: #fca5a5; font-size: 18px; }
   .hint { font-size: 13px; color: var(--muted); margin: 4px 0 12px; }
 
   #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(150%);
-    background: #f8fafc; color: #0f172a; padding: 12px 18px; border-radius: 12px; font-weight: 600; z-index: 20;
-    transition: transform .2s, opacity .2s; opacity: 0; max-width: 90vw; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+    background: var(--text); color: #16140f; padding: 12px 18px; border-radius: var(--r); font-weight: 700; z-index: 20; border-left: 4px solid var(--accent);
+    transition: transform .2s, opacity .2s; opacity: 0; max-width: 90vw; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
   #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-  #toast.err { background: #fee2e2; color: #7f1d1d; }
-  .spin { text-align: center; padding: 80px 0; color: var(--muted); }
-  .code { font-family: ui-monospace, Menlo, monospace; letter-spacing: 1px; }
+  #toast.err { background: #fee2e2; color: #7f1d1d; border-left-color: var(--red); }
+  .spin { text-align: center; padding: 80px 0; color: var(--muted); font-family: var(--mono); }
+  .code { font-family: var(--mono); letter-spacing: .5px; }
   .crew { padding: 14px 0; border-top: 1px solid var(--line); }
   .crew:first-child { border-top: 0; }
+  .crew b { font: 600 17px var(--head); text-transform: uppercase; letter-spacing: .2px; }
   .crew .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  table.mini { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .contact { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .opt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 14px; margin-bottom: 8px;
+    background: var(--bg); border: 1px solid var(--line2); border-radius: var(--r); }
+  .opt .ic { font-size: 22px; width: 30px; text-align: center; }
+  .opt b { display: block; font: 600 16px var(--head); text-transform: uppercase; }
+  .opt:disabled { opacity: .45; }
 </style>
 </head>
 <body>
@@ -192,6 +218,13 @@ async function rpc(fn, args) {
   return data;
 }
 
+// ---------- header with logo ----------
+const LOGO = C.LOGO_URL || 'https://2wdieselrepair.com/user/themes/dieselworks/images/logo.png';
+function headHTML(eyebrow, titleHTML, rightHTML) {
+  return `<div class="top"><div class="brand"><img src="${esc(LOGO)}" alt="" onerror="this.remove()">
+    <div class="grow"><div class="eyebrow">${esc(eyebrow)}</div><div class="who">${titleHTML}</div></div></div>${rightHTML || ''}</div>`;
+}
+
 // ---------- bottom sheet ----------
 function openSheet(html) {
   const sh = document.getElementById('sheet');
@@ -207,7 +240,7 @@ document.getElementById('shade').onclick = closeSheet;
 // ---------- startup ----------
 const params = new URLSearchParams(location.search);
 const ADMIN = params.has('admin') || location.hash === '#admin';
-const S = { token: null, adminTok: ls.get('tc_admin'), me: null, data: null, ws: null, tab: 'hours', crew: [], logins: [] };
+const S = { token: null, adminTok: ls.get('tc_admin'), me: null, data: null, ws: null, tab: 'hours', crew: [], logins: [], shops: null, shop: ls.get('tc_shop') };
 
 if (params.get('k')) { S.token = params.get('k').trim().toLowerCase(); ls.set('tc_token', S.token); }
 else S.token = ls.get('tc_token');
@@ -231,7 +264,7 @@ function start() {
 // =====================================================================
 function codeScreen(msg) {
   app.innerHTML = `
-    <div class="top"><h1>${esc(C.SHOP_NAME)}</h1></div>
+    ${headHTML(C.SHOP_NAME, 'Time <span class="acc">Clock</span>')}
     <div class="card">
       <h2 style="margin-top:0">Enter your code</h2>
       <p class="muted small">Open the link the office texted you, or type the code from it here.</p>
@@ -331,7 +364,7 @@ function renderEmp() {
   }
 
   app.innerHTML = `
-    <div class="top"><h1>${esc(C.SHOP_NAME)}<br><span class="who">Hi, ${esc(d.employee.name.split(' ')[0])}</span></h1></div>
+    ${headHTML(d.employee.shop || C.SHOP_NAME, `Hi, <span class="acc">${esc(d.employee.name.split(' ')[0])}</span>`)}
     ${bannersHTML()}
     <div class="card clock">
       ${open
@@ -514,7 +547,7 @@ function adminStart() {
 
 function adminLogin(msg) {
   app.innerHTML = `
-    <div class="top"><h1>${esc(C.SHOP_NAME)}<br><span class="who">Office</span></h1></div>
+    ${headHTML(C.SHOP_NAME, 'Office <span class="acc">Sign In</span>')}
     <div class="card">
       <h2 style="margin-top:0">Office sign in</h2>
       ${msg ? `<p style="color:var(--red)">${esc(msg)}</p>` : ''}
@@ -527,7 +560,7 @@ function adminLogin(msg) {
   const go = async () => {
     try {
       S.adminTok = await rpc('admin_login', { p_username: document.getElementById('un').value, p_password: document.getElementById('pw').value });
-      ls.set('tc_admin', S.adminTok); S.me = null; loadAdmin();
+      ls.set('tc_admin', S.adminTok); S.me = null; S.shops = null; loadAdmin();
     } catch (e) { adminLogin(e.message); }
   };
   document.getElementById('go').onclick = go;
@@ -537,7 +570,7 @@ function adminLogin(msg) {
 async function adminCall(fn, args) {
   try { return await rpc(fn, Object.assign({ p_tok: S.adminTok }, args)); }
   catch (e) {
-    if (/ADMIN_LOGIN_REQUIRED/.test(e.message)) { ls.del('tc_admin'); S.adminTok = null; S.me = null; adminLogin('Please sign in again.'); throw new Error('_silent'); }
+    if (/ADMIN_LOGIN_REQUIRED/.test(e.message)) { ls.del('tc_admin'); S.adminTok = null; S.me = null; S.shops = null; adminLogin('Please sign in again.'); throw new Error('_silent'); }
     throw e;
   }
 }
@@ -545,12 +578,19 @@ async function adminCall(fn, args) {
 async function loadAdmin(ws) {
   try {
     if (!S.me) S.me = await adminCall('admin_me', {});
-    if (S.tab === 'crew') { S.crew = await adminCall('admin_employees', {}); }
-    else if (S.tab === 'settings') { S.logins = S.me.is_owner ? await adminCall('admin_logins', {}) : []; }
-    else { S.data = await adminCall('admin_week', { p_week_start: ws || S.ws || todayStr() }); S.ws = S.data.week_start; }
+    if (!S.shops) S.shops = await adminCall('admin_shops', {});
+    if (!S.shops.some((x) => x.id === S.shop)) { S.shop = S.shops[0] ? S.shops[0].id : null; if (S.shop) ls.set('tc_shop', S.shop); }
+    if (S.tab === 'crew') { S.crew = await adminCall('admin_employees', { p_shop: S.shop }); }
+    else if (S.tab === 'settings') {
+      S.logins = S.me.is_owner ? await adminCall('admin_logins', {}) : [];
+      S.shops = await adminCall('admin_shops', {});
+    }
+    else { S.data = await adminCall('admin_week', { p_week_start: ws || S.ws || todayStr(), p_shop: S.shop }); S.ws = S.data.week_start; }
     renderAdmin();
   } catch (e) { if (e.message !== '_silent') toast(e.message, true); }
 }
+
+const shopName = (id) => ((S.shops || []).find((x) => x.id === id) || {}).name || '';
 
 function empWeek(id) {
   const list = S.data.punches.filter((p) => p.employee_id === id);
@@ -561,14 +601,17 @@ function empWeek(id) {
 function renderAdmin() {
   const t = (k, l) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}</button>`;
   const tabs = `<div class="tabs">${t('hours', 'Hours')}${t('crew', 'Crew')}${t('settings', 'Settings')}</div>`;
-  const head = `<div class="top"><h1>${esc(C.SHOP_NAME)}<br><span class="who">${esc(S.me.name.split(' ')[0])}</span>
-    <span class="pill ${S.me.is_owner ? 'ok' : 'on'}" style="vertical-align:middle;margin-left:4px">${S.me.is_owner ? 'Owner' : 'Manager'}</span></h1>
-    <button class="btn sm ghost" id="logout">Sign out</button></div>`;
-  app.innerHTML = head + tabs + (S.tab === 'crew' ? crewHTML() : S.tab === 'settings' ? settingsHTML() : hoursHTML());
+  const shopbar = (S.tab !== 'settings' && S.shops && S.shops.length > 1)
+    ? `<div class="shopbar">${S.shops.map((x) => `<button data-shop="${x.id}" class="${x.id === S.shop ? 'on' : ''}">${esc(x.name)}</button>`).join('')}</div>` : '';
+  const head = headHTML(`${S.me.is_owner ? 'Owner' : 'Manager'} · ${S.me.name}`,
+    S.tab === 'settings' ? 'Office <span class="acc">Settings</span>' : `<span class="acc">${esc(shopName(S.shop) || C.SHOP_NAME)}</span>`,
+    '<button class="btn sm ghost" id="logout">Sign out</button>');
+  app.innerHTML = head + shopbar + tabs + (S.tab === 'crew' ? crewHTML() : S.tab === 'settings' ? settingsHTML() : hoursHTML());
   app.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => { S.tab = b.dataset.tab; loadAdmin(); });
+  app.querySelectorAll('[data-shop]').forEach((b) => b.onclick = () => { S.shop = b.dataset.shop; ls.set('tc_shop', S.shop); loadAdmin(); });
   document.getElementById('logout').onclick = async () => {
     try { await rpc('admin_logout', { p_tok: S.adminTok }); } catch (_) {}
-    ls.del('tc_admin'); S.adminTok = null; S.me = null; adminLogin();
+    ls.del('tc_admin'); S.adminTok = null; S.me = null; S.shops = null; adminLogin();
   };
   S.tab === 'crew' ? wireCrew() : S.tab === 'settings' ? wireSettings() : wireHours();
 }
@@ -594,10 +637,10 @@ function hoursHTML() {
         <div class="wtitle"><b>${weekLabel(ws, d.today)}</b><span class="small muted">${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}, ${parseYmd(addDays(ws, 6)).getFullYear()}</span></div>
         <button class="arrow" id="next" ${ws >= weekStartOf(d.today) ? 'disabled' : ''}>›</button>
       </div>
-      <div class="row small muted" style="justify-content:space-between;margin:8px 2px 4px">
+      <div class="row small muted code" style="justify-content:space-between;margin:8px 2px 4px">
         <span>${subCount} of ${d.employees.length} submitted</span><span>${hrs(all)} hrs total</span></div>
     </div>
-    <div class="card" style="padding-top:4px;padding-bottom:4px">${rows || '<p class="muted center">No employees yet. Add them on the Crew tab.</p>'}</div>
+    <div class="card" style="padding-top:4px;padding-bottom:4px">${rows || '<p class="muted center">No employees at this shop yet. Add them on the Crew tab.</p>'}</div>
     <button class="btn block ghost" id="csv">⬇︎ Download payroll CSV</button>`;
 }
 
@@ -619,13 +662,13 @@ function openEmpDetail(id) {
     days += `<button class="day" data-aday="${date}">
       <div class="dname">${fmtDay(date)}<span>${fmtShort(date)}</span></div>
       <div class="chips">${list.map((p) => `<span class="chip ${p.clock_out ? '' : 'open'}">${fmtTime(p.clock_in)}–${p.clock_out ? fmtTime(p.clock_out) : 'now'}</span>`).join('')}
-        ${[...new Set(list.map((p) => p.edited_by).filter(Boolean))].map((n) => `<span style="width:100%;font-size:12px;color:var(--amber)">✎ changed by ${esc(n)}</span>`).join('')}</div>
+        ${[...new Set(list.map((p) => p.edited_by).filter(Boolean))].map((n) => `<span style="width:100%;font-size:12px;color:var(--accent)">✎ changed by ${esc(n)}</span>`).join('')}</div>
       <div class="dt">${m ? hrs(m) : ''}</div><div class="chev">›</div></button>`;
   }
   openSheet(`
-    <div class="sheethead"><div><h2>${esc(e.name)}</h2><div class="small muted">${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}</div></div><button class="x" id="sx">✕</button></div>
+    <div class="sheethead"><div><h2>${esc(e.name)}</h2><div class="small muted code">${esc(shopName(S.shop))} · ${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}</div></div><button class="x" id="sx">✕</button></div>
     <div class="total"><span class="num">${hrs(w.total)}</span><span class="unit">hrs</span>
-      <div class="small muted">${hrs(Math.min(w.total, 2400))} regular · <span style="color:${w.ot ? 'var(--amber)' : 'inherit'}">${hrs(w.ot)} overtime</span></div></div>
+      <div class="small muted">${hrs(Math.min(w.total, 2400))} regular · <span style="color:${w.ot ? 'var(--accent)' : 'inherit'}">${hrs(w.ot)} overtime</span></div></div>
     ${days}
     <div style="height:12px"></div>
     ${w.submitted
@@ -653,92 +696,154 @@ function openEmpDetail(id) {
 }
 
 function exportCSV() {
-  const d = S.data, ws = S.ws, we = addDays(ws, 6);
+  const d = S.data, ws = S.ws, we = addDays(ws, 6), shop = shopName(S.shop);
   const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
   const dayHead = [...Array(7)].map((_, i) => `${fmtDay(addDays(ws, i))} ${addDays(ws, i)}`);
-  const lines = [['Employee', 'Week Start', 'Week End', ...dayHead, 'Total Hours', 'Regular', 'Overtime', 'Submitted'].map(q).join(',')];
+  const lines = [['Shop', 'Employee', 'Week Start', 'Week End', ...dayHead, 'Total Hours', 'Regular', 'Overtime', 'Submitted'].map(q).join(',')];
   for (const e of d.employees) {
     const w = empWeek(e.id);
     const per = [...Array(7)].map((_, i) => hrs(sumMins(w.list.filter((p) => p.work_date === addDays(ws, i)))));
-    lines.push([e.name, ws, we, ...per, hrs(w.total), hrs(Math.min(w.total, 2400)), hrs(w.ot),
+    lines.push([shop, e.name, ws, we, ...per, hrs(w.total), hrs(Math.min(w.total, 2400)), hrs(w.ot),
       w.submitted ? new Date(w.submitted).toLocaleString() : 'No'].map(q).join(','));
   }
   const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = `timecards_${ws}_to_${we}.csv`;
+  a.href = URL.createObjectURL(blob);
+  a.download = `timecards_${(shop || 'shop').replace(/[^A-Za-z0-9]+/g, '-')}_${ws}_to_${we}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
-// ---------- crew ----------
+// ---------- crew + invites ----------
 const linkFor = (tok) => location.origin + location.pathname.replace(/index\.html$/, '') + '?k=' + tok;
+const cleanPhone = (p) => String(p || '').replace(/[^\d+]/g, '');
+const fmtPhone = (p) => { const d = cleanPhone(p).replace(/^\+?1(?=\d{10}$)/, ''); return /^\d{10}$/.test(d) ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : (p || ''); };
+
+function inviteText(e) {
+  const shop = shopName(e.shop_id) || C.SHOP_NAME;
+  return `Hi ${e.name.split(' ')[0]}, here's your ${shop} time clock link:\n${linkFor(e.token)}\n\n` +
+    `iPhone: open it in Safari, tap Share ⬆︎ → "Add to Home Screen", then open it from your Home Screen and tap "Turn on reminders".\n` +
+    `Android: open it in Chrome, tap "Install" (or ⋮ menu → Add to Home screen) and tap "Turn on reminders".`;
+}
 
 function crewHTML() {
   const list = S.crew.map((e) => `
     <div class="crew">
       <div class="row"><div class="grow"><b>${esc(e.name)}</b> ${e.active ? '' : '<span class="pill off">inactive</span>'}
+        <div class="contact">${e.phone ? '📱 ' + esc(fmtPhone(e.phone)) : ''}${e.phone && e.email ? ' · ' : ''}${e.email ? '✉️ ' + esc(e.email) : ''}</div>
         <div class="small muted">Code <span class="code">${esc(e.token)}</span> · ${e.push ? '🔔 reminders on' : '🔕 reminders off'}</div></div></div>
       <div class="btns">
-        ${e.active ? `<button class="btn sm blue" data-share="${e.id}">Text link</button>
-        <button class="btn sm" data-copy="${e.id}">Copy link</button>` : ''}
-        <button class="btn sm ghost" data-rename="${e.id}">Rename</button>
+        ${e.active ? `<button class="btn sm blue" data-invite="${e.id}">Send invite</button>` : ''}
+        <button class="btn sm ghost" data-edit="${e.id}">Edit</button>
         <button class="btn sm ghost" data-newlink="${e.id}">New link</button>
         <button class="btn sm ghost" data-toggle="${e.id}">${e.active ? 'Deactivate' : 'Reactivate'}</button>
       </div>
     </div>`).join('');
   return `
     <div class="card">
-      <label class="lbl">Add an employee</label>
-      <div class="row"><input id="newname" class="field grow" placeholder="Name" autocomplete="off"><button class="btn green" id="addemp">Add</button></div>
+      <label class="lbl">Add an employee to ${esc(shopName(S.shop))}</label>
+      <input id="newname" class="field" placeholder="Name" autocomplete="off"><div style="height:8px"></div>
+      <input id="newphone" class="field" type="tel" placeholder="Cell phone (for a text invite)" autocomplete="off"><div style="height:8px"></div>
+      <input id="newemail" class="field" type="email" placeholder="Email (optional)" autocomplete="off" autocapitalize="off"><div style="height:10px"></div>
+      <button class="btn green block" id="addemp">Add &amp; send invite</button>
     </div>
-    <div class="card">${list || '<p class="muted center">No one yet.</p>'}</div>`;
+    <div class="card">${list || '<p class="muted center">No one at this shop yet.</p>'}</div>`;
 }
 
-async function shareLink(e) {
-  const url = linkFor(e.token);
-  const text = `Hi ${e.name.split(' ')[0]}, here's your time clock link:\n${url}\n\niPhone: open it in Safari, tap Share ⬆︎ → "Add to Home Screen", then open it from your Home Screen and tap "Turn on reminders".\nAndroid: open it in Chrome, tap "Install" (or ⋮ menu → Add to Home screen) and tap "Turn on reminders".`;
-  if (navigator.share) {
-    try { await navigator.share({ text }); return; } catch (err) { if (err.name === 'AbortError') return; }
-  }
-  location.href = (isIOS ? 'sms:&body=' : 'sms:?body=') + encodeURIComponent(text);
+function openInvite(e) {
+  const draw = () => openSheet(`
+    <div class="sheethead"><div><h2>Invite ${esc(e.name.split(' ')[0])}</h2><div class="small muted code">${esc(shopName(e.shop_id))}</div></div><button class="x" id="sx">✕</button></div>
+    <label class="lbl">Cell phone</label>
+    <input id="iphone" class="field" type="tel" value="${esc(e.phone || '')}" placeholder="(512) 555-1234"><div style="height:10px"></div>
+    <label class="lbl">Email</label>
+    <input id="iemail" class="field" type="email" value="${esc(e.email || '')}" placeholder="name@email.com" autocapitalize="off"><div style="height:14px"></div>
+    <button class="opt" id="itext"><span class="ic">💬</span><span class="grow"><b>Send text</b><span class="small muted">Opens your Messages app with the link ready to send</span></span></button>
+    <button class="opt" id="imail"><span class="ic">✉️</span><span class="grow"><b>Send email</b><span class="small muted">Opens your email app with the link ready to send</span></span></button>
+    <button class="opt" id="icopy"><span class="ic">🔗</span><span class="grow"><b>Copy link</b><span class="small muted">Paste it anywhere</span></span></button>`);
+  draw();
+  const sh = document.getElementById('sheet');
+  sh.querySelector('#sx').onclick = closeSheet;
+  const saveContact = async () => {
+    const phone = sh.querySelector('#iphone').value.trim(), email = sh.querySelector('#iemail').value.trim();
+    if (phone !== (e.phone || '') || email !== (e.email || '')) {
+      try {
+        await adminCall('admin_update_employee', { p_id: e.id, p_name: e.name, p_active: e.active, p_shop: e.shop_id, p_phone: phone, p_email: email });
+        e.phone = phone; e.email = email.toLowerCase();
+      } catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+    }
+    return { phone, email };
+  };
+  sh.querySelector('#itext').onclick = async () => {
+    const { phone } = await saveContact();
+    const num = cleanPhone(phone);
+    if (!num) return toast('Type in their cell number first.', true);
+    location.href = `sms:${num}${isIOS ? '&' : '?'}body=${encodeURIComponent(inviteText(e))}`;
+  };
+  sh.querySelector('#imail').onclick = async () => {
+    const { email } = await saveContact();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Type in a valid email first.', true);
+    const subject = `Your ${shopName(e.shop_id) || C.SHOP_NAME} time clock link`;
+    location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteText(e))}`;
+  };
+  sh.querySelector('#icopy').onclick = async () => {
+    await saveContact();
+    try { await navigator.clipboard.writeText(linkFor(e.token)); toast('Link copied'); }
+    catch (_) { prompt('Copy this link:', linkFor(e.token)); }
+  };
+}
+
+function openEditEmp(e) {
+  openSheet(`
+    <div class="sheethead"><h2>Edit ${esc(e.name.split(' ')[0])}</h2><button class="x" id="sx">✕</button></div>
+    <label class="lbl">Name</label><input id="ename" class="field" value="${esc(e.name)}"><div style="height:10px"></div>
+    <label class="lbl">Cell phone</label><input id="ephone" class="field" type="tel" value="${esc(e.phone || '')}"><div style="height:10px"></div>
+    <label class="lbl">Email</label><input id="eemail" class="field" type="email" value="${esc(e.email || '')}" autocapitalize="off"><div style="height:10px"></div>
+    <label class="lbl">Shop</label>
+    <select id="eshop" class="field">${(S.shops || []).map((x) => `<option value="${x.id}" ${x.id === e.shop_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+    <div style="height:16px"></div>
+    <button class="btn green block" id="esave">Save</button>`);
+  const sh = document.getElementById('sheet');
+  sh.querySelector('#sx').onclick = closeSheet;
+  sh.querySelector('#esave').onclick = async () => {
+    try {
+      await adminCall('admin_update_employee', { p_id: e.id, p_name: sh.querySelector('#ename').value, p_active: e.active,
+        p_shop: sh.querySelector('#eshop').value, p_phone: sh.querySelector('#ephone').value, p_email: sh.querySelector('#eemail').value });
+      closeSheet(); toast('Saved ✓'); S.shops = null; loadAdmin();
+    } catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
 }
 
 function wireCrew() {
   const find = (id) => S.crew.find((x) => x.id === id);
   const add = async () => {
     const name = document.getElementById('newname').value.trim();
-    if (!name) return;
-    try { const e = await adminCall('admin_add_employee', { p_name: name }); toast(`${e.name} added`); await loadAdmin(); }
-    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+    if (!name) return toast('Enter a name.', true);
+    try {
+      const e = await adminCall('admin_add_employee', { p_name: name, p_shop: S.shop,
+        p_phone: document.getElementById('newphone').value, p_email: document.getElementById('newemail').value });
+      toast(`${e.name} added`); S.shops = null; await loadAdmin(); openInvite(e);
+    } catch (err) { if (err.message !== '_silent') toast(err.message, true); }
   };
   document.getElementById('addemp').onclick = add;
-  document.getElementById('newname').onkeydown = (ev) => { if (ev.key === 'Enter') add(); };
-  app.querySelectorAll('[data-share]').forEach((b) => b.onclick = () => shareLink(find(b.dataset.share)));
-  app.querySelectorAll('[data-copy]').forEach((b) => b.onclick = async () => {
-    try { await navigator.clipboard.writeText(linkFor(find(b.dataset.copy).token)); toast('Link copied'); }
-    catch (_) { prompt('Copy this link:', linkFor(find(b.dataset.copy).token)); }
-  });
-  app.querySelectorAll('[data-rename]').forEach((b) => b.onclick = async () => {
-    const e = find(b.dataset.rename); const n = prompt('Name', e.name);
-    if (!n || n.trim() === e.name) return;
-    try { await adminCall('admin_update_employee', { p_id: e.id, p_name: n, p_active: e.active }); loadAdmin(); }
-    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
-  });
+  app.querySelectorAll('[data-invite]').forEach((b) => b.onclick = () => openInvite(find(b.dataset.invite)));
+  app.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => openEditEmp(find(b.dataset.edit)));
   app.querySelectorAll('[data-newlink]').forEach((b) => b.onclick = async () => {
     const e = find(b.dataset.newlink);
-    if (!confirm(`Make a new link for ${e.name}? Their old link stops working and they'll need to add the new one to their Home Screen.`)) return;
-    try { await adminCall('admin_new_link', { p_id: e.id }); toast('New link made. Text it to them.'); loadAdmin(); }
+    if (!confirm(`Make a new link for ${e.name}? Their old link stops working and they'll need the new one.`)) return;
+    try { const tok = await adminCall('admin_new_link', { p_id: e.id }); toast('New link made'); await loadAdmin(); openInvite(Object.assign({}, e, { token: tok })); }
     catch (err) { if (err.message !== '_silent') toast(err.message, true); }
   });
   app.querySelectorAll('[data-toggle]').forEach((b) => b.onclick = async () => {
     const e = find(b.dataset.toggle);
     if (e.active && !confirm(`Deactivate ${e.name}? Their link stops working. Their past hours are kept.`)) return;
-    try { await adminCall('admin_update_employee', { p_id: e.id, p_name: e.name, p_active: !e.active }); loadAdmin(); }
-    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+    try {
+      await adminCall('admin_update_employee', { p_id: e.id, p_name: e.name, p_active: !e.active, p_shop: e.shop_id, p_phone: e.phone || '', p_email: e.email || '' });
+      S.shops = null; loadAdmin();
+    } catch (err) { if (err.message !== '_silent') toast(err.message, true); }
   });
 }
 
-// ---------- settings (my password; owner manages office logins) ----------
+// ---------- settings (shops, my password; owner manages office logins) ----------
 const officeLink = () => location.origin + location.pathname.replace(/index\.html$/, '') + '?admin';
 
 function settingsHTML() {
@@ -755,35 +860,42 @@ function settingsHTML() {
         <button class="btn sm ${a.active ? 'red' : 'green'}" data-lactive="${a.id}">${a.active ? 'Turn off' : 'Turn on'}</button>
       </div>`}
     </div>`).join('');
+  const shops = (S.shops || []).map((x) => `
+    <div class="crew"><div class="row"><div class="grow"><b>${esc(x.name)}</b>
+      <div class="small muted">${x.employees} active employee${x.employees === 1 ? '' : 's'}</div></div>
+      ${me.is_owner ? `<button class="btn sm ghost" data-srename="${x.id}">Rename</button>` : ''}</div></div>`).join('');
   return `
     <div class="card">
       <b>Signed in as ${esc(me.name)}</b>
-      <div class="small muted">Username <span class="code">${esc(me.username)}</span> · ${me.is_owner ? 'Owner (can manage office logins)' : 'Manager'}</div>
+      <div class="small muted">Username <span class="code">${esc(me.username)}</span> · ${me.is_owner ? 'Owner (can manage shops and office logins)' : 'Manager'}</div>
+    </div>
+    <div class="card">
+      <label class="lbl">Shops</label>
+      ${shops}
+      ${me.is_owner ? `<div class="row" style="margin-top:12px"><input id="newshop" class="field grow" placeholder="New shop name" autocomplete="off"><button class="btn green" id="addshop">Add</button></div>` : ''}
     </div>
     ${me.is_owner ? `
     <div class="card">
-      <b>Office logins</b>
-      <p class="small muted" style="margin:4px 0 6px">Everyone who can see hours and edit time cards. Turning a login off signs that person out everywhere.</p>
+      <label class="lbl">Office logins</label>
+      <p class="small muted" style="margin:0 0 6px">Everyone who can see hours and edit time cards, at every shop. Turning a login off signs that person out everywhere.</p>
       ${logins}
     </div>
     <div class="card">
-      <b>Add an office login</b>
-      <div style="height:10px"></div>
+      <label class="lbl">Add an office login</label>
       <input id="ln" class="field" placeholder="Name (e.g. Ken)" autocomplete="off"><div style="height:8px"></div>
       <input id="lu" class="field" placeholder="Username" autocapitalize="off" autocorrect="off" autocomplete="off"><div style="height:8px"></div>
       <input id="lp" class="field" placeholder="Starting password (6+ characters)" autocomplete="new-password"><div style="height:10px"></div>
-      <label class="row small" style="gap:8px;margin-bottom:12px"><input type="checkbox" id="lo" style="width:20px;height:20px"> Make this an owner login (can manage logins)</label>
+      <label class="row small" style="gap:8px;margin-bottom:12px"><input type="checkbox" id="lo" style="width:20px;height:20px;accent-color:var(--accent)"> Make this an owner login (can manage shops and logins)</label>
       <button class="btn green block" id="addlogin">Add login</button>
     </div>` : ''}
     <div class="card">
-      <b>Change my password</b>
-      <div style="height:10px"></div>
+      <label class="lbl">Change my password</label>
       <input id="pold" type="password" class="field" placeholder="Current password" autocomplete="current-password"><div style="height:8px"></div>
       <input id="pnew" type="password" class="field" placeholder="New password (6+ characters)" autocomplete="new-password"><div style="height:10px"></div>
       <button class="btn block" id="chpw">Update password</button>
     </div>
     <div class="card small muted">
-      <b style="color:var(--text)">Office link</b><br>Bookmark it or add it to your Home Screen. Anyone with an office login uses this same link:<br>
+      <label class="lbl">Office link</label>Bookmark it or add it to your Home Screen. Everyone with an office login uses this same link:<br>
       <span class="code" style="color:var(--text);word-break:break-all">${esc(officeLink())}</span>
       <div style="height:8px"></div><button class="btn sm" id="copyoffice">Copy link</button>
     </div>`;
@@ -791,7 +903,7 @@ function settingsHTML() {
 
 function wireSettings() {
   const run = async (fn, args, ok) => {
-    try { await adminCall(fn, args); if (ok) toast(ok); await loadAdmin(); }
+    try { await adminCall(fn, args); if (ok) toast(ok); S.shops = null; await loadAdmin(); }
     catch (err) { if (err.message !== '_silent') toast(err.message, true); }
   };
   const find = (id) => S.logins.find((x) => x.id === id);
@@ -800,6 +912,13 @@ function wireSettings() {
   document.getElementById('copyoffice').onclick = async () => {
     try { await navigator.clipboard.writeText(officeLink()); toast('Link copied'); } catch (_) { prompt('Copy this link:', officeLink()); }
   };
+  const addShop = document.getElementById('addshop');
+  if (addShop) addShop.onclick = () => run('admin_add_shop', { p_name: document.getElementById('newshop').value }, 'Shop added ✓');
+  app.querySelectorAll('[data-srename]').forEach((b) => b.onclick = () => {
+    const x = S.shops.find((y) => y.id === b.dataset.srename);
+    const n = prompt('Shop name', x.name);
+    if (n && n.trim() && n.trim() !== x.name) run('admin_rename_shop', { p_id: x.id, p_name: n }, 'Renamed ✓');
+  });
   const add = document.getElementById('addlogin');
   if (add) add.onclick = () => run('admin_add_login', {
     p_name: document.getElementById('ln').value, p_username: document.getElementById('lu').value,
@@ -811,7 +930,7 @@ function wireSettings() {
   });
   app.querySelectorAll('[data-lrole]').forEach((b) => b.onclick = () => {
     const a = find(b.dataset.lrole);
-    if (confirm(a.is_owner ? `Make ${a.name} a manager? They won't be able to manage logins.` : `Make ${a.name} an owner? They'll be able to add and remove office logins.`))
+    if (confirm(a.is_owner ? `Make ${a.name} a manager? They won't be able to manage shops or logins.` : `Make ${a.name} an owner? They'll be able to manage shops and office logins.`))
       run('admin_update_login', { p_id: a.id, p_active: a.active, p_is_owner: !a.is_owner, p_new_password: null });
   });
   app.querySelectorAll('[data-lactive]').forEach((b) => b.onclick = () => {
