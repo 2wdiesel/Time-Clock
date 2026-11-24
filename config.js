@@ -1,8 +1,8 @@
 // ============================================================
-//  Shop Time Clock — settings
+//  2W Diesel Time Clock — settings
 // ============================================================
 window.TC_CONFIG = {
-  SHOP_NAME: "Shop Time Clock",
+  SHOP_NAME: "2W Diesel",
 
   // Supabase project: shop-timeclock (2wdiesel's Org)
   SUPABASE_URL: "https://ysqxggawyflzbiefclxv.supabase.co",
