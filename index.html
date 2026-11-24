@@ -156,6 +156,7 @@
   .opt .ic { font-size: 22px; width: 30px; text-align: center; }
   .opt b { display: block; font: 600 16px var(--head); text-transform: uppercase; }
   .opt:disabled { opacity: .45; }
+.linkbtn{background:none;border:0;color:var(--accent,#f4621f);font:inherit;font-size:14px;text-decoration:underline;margin-top:10px;cursor:pointer;padding:6px}
 </style>
 </head>
 <body>
@@ -371,7 +372,8 @@ function renderEmp() {
         ? `<button class="bigbtn out" id="clockbtn">CLOCK OUT<small>tap to end shift</small></button>
            <div class="status">On the clock since <b>${fmtTime(open.clock_in)}</b><br><span class="muted" id="elapsed">${hm(minsOf(open))}</span></div>`
         : `<button class="bigbtn in" id="clockbtn">CLOCK IN<small>tap to start</small></button>
-           <div class="status muted">You're off the clock</div>`}
+           <div class="status muted">You're off the clock</div>
+           <button class="linkbtn" id="latebtn">Forgot to clock in? Start from an earlier time</button>`}
     </div>
     <div class="card">
       <div class="weekhead">
@@ -387,6 +389,7 @@ function renderEmp() {
     <p class="center small muted">Forgot to clock in or out? Tap the day to type in your times.</p>`;
 
   document.getElementById('clockbtn').onclick = clockToggle;
+  const lb = document.getElementById('latebtn'); if (lb) lb.onclick = openLateClockIn;
   document.getElementById('prev').onclick = () => loadEmp(addDays(ws, -7));
   document.getElementById('next').onclick = () => loadEmp(addDays(ws, 7));
   app.querySelectorAll('[data-day]').forEach((b) => b.onclick = () => {
@@ -416,6 +419,41 @@ async function clockToggle() {
     toast(wasOpen ? 'Clocked out ✓' : 'Clocked in ✓');
     await loadEmp(weekStartOf(todayStr()));
   } catch (e) { toast(e.message, true); btn.disabled = false; loadEmp(); }
+}
+
+// "Forgot to clock in?" — start the clock from an earlier time today.
+function openLateClockIn() {
+  const today = todayStr();
+  const lastOut = (S.data.punches || []).filter((p) => p.work_date === today && p.clock_out)
+    .map((p) => new Date(p.clock_out)).sort((a, b) => b - a)[0];
+  const pad = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+  openSheet(`
+    <div class="sheethead"><h2>Start the clock earlier</h2><button class="x" id="sx">✕</button></div>
+    <p class="small muted" style="margin-top:0">Back from lunch (or started work) and forgot to tap Clock In? Pick the time you actually started.
+      The clock runs from then until you tap Clock Out.${lastOut ? `<br>Your last clock-out today was <b>${esc(fmtTime(lastOut.toISOString()))}</b>.` : ''}</p>
+    <label class="lbl">Started at (today)</label>
+    <input id="latetime" class="field" type="time" value="${pad(now.getHours())}:${pad(now.getMinutes())}">
+    <div style="height:16px"></div>
+    <button class="btn green block" id="latego">Clock me in from this time</button>`);
+  const sh = document.getElementById('sheet');
+  sh.querySelector('#sx').onclick = closeSheet;
+  sh.querySelector('#latego').onclick = async () => {
+    const v = sh.querySelector('#latetime').value;
+    if (!/^\d{2}:\d{2}$/.test(v)) return toast('Pick a time first.', true);
+    const [h, m] = v.split(':').map(Number);
+    const t = new Date(); t.setHours(h, m, 0, 0);
+    if (t > new Date(Date.now() + 60000)) return toast("That time hasn't happened yet.", true);
+    if (lastOut && t < lastOut) return toast(`Pick a time after your last clock-out (${fmtTime(lastOut.toISOString())}).`, true);
+    const b = sh.querySelector('#latego'); b.disabled = true;
+    try {
+      await rpc('emp_clock_in_at', { p_token: S.token, p_in: t.toISOString() });
+      closeSheet();
+      if (navigator.vibrate) navigator.vibrate(40);
+      toast(`Clocked in from ${fmtTime(t.toISOString())} ✓`);
+      await loadEmp(weekStartOf(todayStr()));
+    } catch (e) { toast(e.message, true); b.disabled = false; }
+  };
 }
 
 async function submitWeek() {
