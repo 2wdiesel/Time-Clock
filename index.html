@@ -151,7 +151,7 @@
   .crew b { font: 600 17px var(--head); text-transform: uppercase; letter-spacing: .2px; }
   .crew .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .contact { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .opt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 14px; margin-bottom: 8px;
+  .opt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 14px; margin-bottom: 8px; color: inherit; text-decoration: none; font: inherit;
     background: var(--bg); border: 1px solid var(--line2); border-radius: var(--r); }
   .opt .ic { font-size: 22px; width: 30px; text-align: center; }
   .opt b { display: block; font: 600 16px var(--head); text-transform: uppercase; }
@@ -766,8 +766,8 @@ function openInvite(e) {
     <input id="iphone" class="field" type="tel" value="${esc(e.phone || '')}" placeholder="(512) 555-1234"><div style="height:10px"></div>
     <label class="lbl">Email</label>
     <input id="iemail" class="field" type="email" value="${esc(e.email || '')}" placeholder="name@email.com" autocapitalize="off"><div style="height:14px"></div>
-    <button class="opt" id="itext"><span class="ic">💬</span><span class="grow"><b>Send text</b><span class="small muted">Opens your Messages app with the link ready to send</span></span></button>
-    <button class="opt" id="imail"><span class="ic">✉️</span><span class="grow"><b>Send email</b><span class="small muted">Opens your email app with the link ready to send</span></span></button>
+    <a class="opt" id="itext" href="#"><span class="ic">💬</span><span class="grow"><b>Send text</b><span class="small muted">Opens your Messages app with the link ready to send</span></span></a>
+    <a class="opt" id="imail" href="#"><span class="ic">✉️</span><span class="grow"><b>Send email</b><span class="small muted">Opens your email app with the link ready to send</span></span></a>
     <button class="opt" id="icopy"><span class="ic">🔗</span><span class="grow"><b>Copy link</b><span class="small muted">Paste it anywhere</span></span></button>`);
   draw();
   const sh = document.getElementById('sheet');
@@ -782,17 +782,26 @@ function openInvite(e) {
     }
     return { phone, email };
   };
-  sh.querySelector('#itext').onclick = async () => {
-    const { phone } = await saveContact();
-    const num = cleanPhone(phone);
-    if (!num) return toast('Type in their cell number first.', true);
-    location.href = `sms:${num}${isIOS ? '&' : '?'}body=${encodeURIComponent(inviteText(e))}`;
+  const isWindows = /Windows/i.test(navigator.userAgent);
+  const tA = sh.querySelector('#itext'), mA = sh.querySelector('#imail');
+  const iPh = sh.querySelector('#iphone'), iEm = sh.querySelector('#iemail');
+  const subject = e.token ? `Your ${shopName(e.shop_id) || C.SHOP_NAME} time clock link` : `Your ${C.SHOP_NAME} office login`;
+  const refresh = () => {
+    const num = cleanPhone(iPh.value), em = iEm.value.trim();
+    tA.href = num ? `sms:${num}${isIOS ? '&' : '?'}body=${encodeURIComponent(inviteText(e))}` : '#';
+    mA.href = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)
+      ? `mailto:${encodeURIComponent(em)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteText(e))}` : '#';
   };
-  sh.querySelector('#imail').onclick = async () => {
-    const { email } = await saveContact();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Type in a valid email first.', true);
-    const subject = e.token ? `Your ${shopName(e.shop_id) || C.SHOP_NAME} time clock link` : `Your ${C.SHOP_NAME} office login`;
-    location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteText(e))}`;
+  iPh.oninput = refresh; iEm.oninput = refresh; refresh();
+  // Real links (not script-opened) so phones always hand off to Messages / Mail.
+  tA.onclick = (ev) => {
+    if (!cleanPhone(iPh.value)) { ev.preventDefault(); return toast('Type in their cell number first.', true); }
+    if (isWindows) { ev.preventDefault(); return toast('Texting works from your phone. On this computer, use Send email or Copy link.', true); }
+    saveContact();
+  };
+  mA.onclick = (ev) => {
+    if (mA.getAttribute('href') === '#') { ev.preventDefault(); return toast('Type in a valid email first.', true); }
+    saveContact();
   };
   sh.querySelector('#icopy').onclick = async () => {
     await saveContact();
