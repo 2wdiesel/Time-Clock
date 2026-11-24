@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Shop Time Clock</title>
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json" id="mlink">
+<script>if (/[?&]admin\b/.test(location.search) || location.hash === '#admin') document.getElementById('mlink').href = 'manifest-admin.json';</script>
 <meta name="theme-color" content="#0a0a0b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -196,7 +197,7 @@ const ls = {
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isAndroid = /Android/i.test(navigator.userAgent);
 let installEvt = null;
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; if (S.data && !ADMIN) renderEmp(); });
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; if (S.data && !ADMIN) renderEmp(); if (ADMIN && S.me && S.tab === 'settings') renderAdmin(); });
 window.addEventListener('appinstalled', () => { installEvt = null; if (S.data && !ADMIN) renderEmp(); });
 const isStandalone = () => window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
 
@@ -963,6 +964,14 @@ function settingsHTML() {
            <p class="small muted" style="margin:0 0 8px">Clock in and out yourself? Get your own time clock at ${esc(shopName(S.shop) || 'your shop')}.</p>
            <button class="btn sm" id="myclock">Give me a time clock</button>`}
     </div>
+    ${matchMedia('(display-mode: standalone)').matches ? '' : `
+    <div class="card">
+      <label class="lbl">Office app on this computer</label>
+      ${installEvt
+        ? `<div class="row"><p class="small muted grow" style="margin:0">Adds a 2W Office icon to the desktop that opens straight to this page in its own window.</p>
+           <button class="btn sm blue" id="installoffice">Install on this computer</button></div>`
+        : `<p class="small muted" style="margin:0">In Chrome or Edge, open the ⋮ menu → <b>Cast, save, and share</b> → <b>Install page as app</b>. If it's already installed, open <b>2W Office</b> from your desktop or Start menu.</p>`}
+    </div>`}
     <div class="card">
       <label class="lbl">Shops</label>
       ${shops}
@@ -1041,6 +1050,8 @@ function wireSettings() {
     try { await adminCall('admin_update_my_name', { p_name: n }); S.me = null; toast('Name updated ✓'); await loadAdmin(); }
     catch (err) { if (err.message !== '_silent') toast(err.message, true); }
   };
+  const io = document.getElementById('installoffice');
+  if (io) io.onclick = async () => { const ev = installEvt; installEvt = null; ev.prompt(); try { await ev.userChoice; } catch (_) {} renderAdmin(); };
   const mysend = document.getElementById('mysend');
   if (mysend) mysend.onclick = () => openInvite(Object.assign({}, S.me.employee, { email: S.me.employee.email || S.me.email || '' }));
   const myclock = document.getElementById('myclock');
