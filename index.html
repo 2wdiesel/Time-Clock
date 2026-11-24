@@ -582,6 +582,7 @@ async function loadAdmin(ws) {
     if (!S.shops.some((x) => x.id === S.shop)) { S.shop = S.shops[0] ? S.shops[0].id : null; if (S.shop) ls.set('tc_shop', S.shop); }
     if (S.tab === 'crew') { S.crew = await adminCall('admin_employees', { p_shop: S.shop }); }
     else if (S.tab === 'settings') {
+      S.me = await adminCall('admin_me', {});
       S.logins = S.me.is_owner ? await adminCall('admin_logins', {}) : [];
       S.shops = await adminCall('admin_shops', {});
     }
@@ -603,7 +604,8 @@ function renderAdmin() {
   const tabs = `<div class="tabs">${t('hours', 'Hours')}${t('crew', 'Crew')}${t('settings', 'Settings')}</div>`;
   const shopbar = (S.tab !== 'settings' && S.shops && S.shops.length > 1)
     ? `<div class="shopbar">${S.shops.map((x) => `<button data-shop="${x.id}" class="${x.id === S.shop ? 'on' : ''}">${esc(x.name)}</button>`).join('')}</div>` : '';
-  const head = headHTML(`${S.me.is_owner ? 'Owner' : 'Manager'} · ${S.me.name}`,
+  const role = S.me.is_owner ? 'Owner' : 'Manager';
+  const head = headHTML(S.me.name && S.me.name.toLowerCase() !== role.toLowerCase() ? `${role} · ${S.me.name}` : role,
     S.tab === 'settings' ? 'Office <span class="acc">Settings</span>' : `<span class="acc">${esc(shopName(S.shop) || C.SHOP_NAME)}</span>`,
     '<button class="btn sm ghost" id="logout">Sign out</button>');
   app.innerHTML = head + shopbar + tabs + (S.tab === 'crew' ? crewHTML() : S.tab === 'settings' ? settingsHTML() : hoursHTML());
@@ -721,9 +723,16 @@ const fmtPhone = (p) => { const d = cleanPhone(p).replace(/^\+?1(?=\d{10}$)/, ''
 
 function inviteText(e) {
   const shop = shopName(e.shop_id) || C.SHOP_NAME;
-  return `Hi ${e.name.split(' ')[0]}, here's your ${shop} time clock link:\n${linkFor(e.token)}\n\n` +
-    `iPhone: open it in Safari, tap Share ⬆︎ → "Add to Home Screen", then open it from your Home Screen and tap "Turn on reminders".\n` +
-    `Android: open it in Chrome, tap "Install" (or ⋮ menu → Add to Home screen) and tap "Turn on reminders".`;
+  let t = `Hi ${e.name.split(' ')[0]},`;
+  if (e.token) {
+    t += ` here's your ${shop} time clock link:\n${linkFor(e.token)}\n\n` +
+      `iPhone: open it in Safari, tap Share ⬆︎ → "Add to Home Screen", then open it from your Home Screen and tap "Turn on reminders".\n` +
+      `Android: open it in Chrome, tap "Install" (or ⋮ menu → Add to Home screen) and tap "Turn on reminders".`;
+  }
+  if (e.office) {
+    t += `${e.token ? '\n\n' : ' '}Office side (hours, crew, payroll):\n${officeLink()}\nSign in with username "${e.office}". Your password will be sent separately.`;
+  }
+  return t;
 }
 
 function crewHTML() {
@@ -752,7 +761,7 @@ function crewHTML() {
 
 function openInvite(e) {
   const draw = () => openSheet(`
-    <div class="sheethead"><div><h2>Invite ${esc(e.name.split(' ')[0])}</h2><div class="small muted code">${esc(shopName(e.shop_id))}</div></div><button class="x" id="sx">✕</button></div>
+    <div class="sheethead"><div><h2>Invite ${esc(e.name.split(' ')[0])}</h2><div class="small muted code">${esc([e.token ? shopName(e.shop_id) : '', e.office ? 'office login: ' + e.office : ''].filter(Boolean).join(' · '))}</div></div><button class="x" id="sx">✕</button></div>
     <label class="lbl">Cell phone</label>
     <input id="iphone" class="field" type="tel" value="${esc(e.phone || '')}" placeholder="(512) 555-1234"><div style="height:10px"></div>
     <label class="lbl">Email</label>
@@ -765,7 +774,7 @@ function openInvite(e) {
   sh.querySelector('#sx').onclick = closeSheet;
   const saveContact = async () => {
     const phone = sh.querySelector('#iphone').value.trim(), email = sh.querySelector('#iemail').value.trim();
-    if (phone !== (e.phone || '') || email !== (e.email || '')) {
+    if (e.token && e.id && (phone !== (e.phone || '') || email !== (e.email || ''))) {
       try {
         await adminCall('admin_update_employee', { p_id: e.id, p_name: e.name, p_active: e.active, p_shop: e.shop_id, p_phone: phone, p_email: email });
         e.phone = phone; e.email = email.toLowerCase();
@@ -782,13 +791,14 @@ function openInvite(e) {
   sh.querySelector('#imail').onclick = async () => {
     const { email } = await saveContact();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('Type in a valid email first.', true);
-    const subject = `Your ${shopName(e.shop_id) || C.SHOP_NAME} time clock link`;
+    const subject = e.token ? `Your ${shopName(e.shop_id) || C.SHOP_NAME} time clock link` : `Your ${C.SHOP_NAME} office login`;
     location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteText(e))}`;
   };
   sh.querySelector('#icopy').onclick = async () => {
     await saveContact();
-    try { await navigator.clipboard.writeText(linkFor(e.token)); toast('Link copied'); }
-    catch (_) { prompt('Copy this link:', linkFor(e.token)); }
+    const link = e.token ? linkFor(e.token) : officeLink();
+    try { await navigator.clipboard.writeText(link); toast('Link copied'); }
+    catch (_) { prompt('Copy this link:', link); }
   };
 }
 
@@ -853,8 +863,11 @@ function settingsHTML() {
       <div class="row"><div class="grow"><b>${esc(a.name)}</b>
         <span class="pill ${a.is_owner ? 'ok' : 'on'}">${a.is_owner ? 'Owner' : 'Manager'}</span>
         ${a.active ? '' : '<span class="pill off">turned off</span>'}
-        <div class="small muted">Username: <span class="code">${esc(a.username)}</span>${a.id === me.id ? ' · you' : ''}</div></div></div>
+        <div class="small muted">Username: <span class="code">${esc(a.username)}</span>${a.id === me.id ? ' · you' : ''}</div>
+        <div class="contact">${a.phone ? '📱 ' + esc(fmtPhone(a.phone)) : ''}${a.phone && a.email ? ' · ' : ''}${a.email ? '✉️ ' + esc(a.email) : ''}${a.employee ? `${a.phone || a.email ? ' · ' : ''}⏱ clocks in at ${esc(shopName(a.employee.shop_id))}` : ''}</div></div></div>
       ${a.id === me.id ? '' : `<div class="btns">
+        ${a.active ? `<button class="btn sm blue" data-linvite="${a.id}">Send invite</button>` : ''}
+        ${a.active && !a.employee ? `<button class="btn sm ghost" data-lclock="${a.id}">Add time clock</button>` : ''}
         <button class="btn sm ghost" data-lreset="${a.id}">Reset password</button>
         <button class="btn sm ghost" data-lrole="${a.id}">${a.is_owner ? 'Make manager' : 'Make owner'}</button>
         <button class="btn sm ${a.active ? 'red' : 'green'}" data-lactive="${a.id}">${a.active ? 'Turn off' : 'Turn on'}</button>
@@ -866,8 +879,17 @@ function settingsHTML() {
       ${me.is_owner ? `<button class="btn sm ghost" data-srename="${x.id}">Rename</button>` : ''}</div></div>`).join('');
   return `
     <div class="card">
-      <b>Signed in as ${esc(me.name)}</b>
-      <div class="small muted">Username <span class="code">${esc(me.username)}</span> · ${me.is_owner ? 'Owner (can manage shops and office logins)' : 'Manager'}</div>
+      <div class="row"><div class="grow"><b>Signed in as ${esc(me.name)}</b>
+        <div class="small muted">Username <span class="code">${esc(me.username)}</span> · ${me.is_owner ? 'Owner (can manage shops and office logins)' : 'Manager'}</div></div>
+        <button class="btn sm ghost" id="myname">Change name</button></div>
+      <div style="height:12px"></div>
+      ${me.employee
+        ? `<label class="lbl">My time clock · ${esc(shopName(me.employee.shop_id))}</label>
+           <div class="row"><a class="btn sm blue" href="${esc(linkFor(me.employee.token))}" target="_blank" rel="noopener" style="text-decoration:none">Open my time clock</a>
+           <button class="btn sm ghost" id="mysend">Send to my phone</button></div>`
+        : `<label class="lbl">My time clock</label>
+           <p class="small muted" style="margin:0 0 8px">Clock in and out yourself? Get your own time clock at ${esc(shopName(S.shop) || 'your shop')}.</p>
+           <button class="btn sm" id="myclock">Give me a time clock</button>`}
     </div>
     <div class="card">
       <label class="lbl">Shops</label>
@@ -884,9 +906,13 @@ function settingsHTML() {
       <label class="lbl">Add an office login</label>
       <input id="ln" class="field" placeholder="Name (e.g. Ken)" autocomplete="off"><div style="height:8px"></div>
       <input id="lu" class="field" placeholder="Username" autocapitalize="off" autocorrect="off" autocomplete="off"><div style="height:8px"></div>
-      <input id="lp" class="field" placeholder="Starting password (6+ characters)" autocomplete="new-password"><div style="height:10px"></div>
+      <input id="lp" class="field" placeholder="Starting password (6+ characters)" autocomplete="new-password"><div style="height:8px"></div>
+      <input id="lph" class="field" type="tel" placeholder="Cell phone (for a text invite)" autocomplete="off"><div style="height:8px"></div>
+      <input id="lem" class="field" type="email" placeholder="Email (optional)" autocomplete="off" autocapitalize="off"><div style="height:10px"></div>
+      <label class="row small" style="gap:8px;margin-bottom:8px"><input type="checkbox" id="lc" checked style="width:20px;height:20px;accent-color:var(--accent)"> They clock in and out too</label>
+      <select id="lsh" class="field" style="margin-bottom:10px">${(S.shops || []).map((x) => `<option value="${x.id}" ${x.id === S.shop ? 'selected' : ''}>Clocks in at: ${esc(x.name)}</option>`).join('')}</select>
       <label class="row small" style="gap:8px;margin-bottom:12px"><input type="checkbox" id="lo" style="width:20px;height:20px;accent-color:var(--accent)"> Make this an owner login (can manage shops and logins)</label>
-      <button class="btn green block" id="addlogin">Add login</button>
+      <button class="btn green block" id="addlogin">Add login &amp; send invite</button>
     </div>` : ''}
     <div class="card">
       <label class="lbl">Change my password</label>
@@ -920,10 +946,37 @@ function wireSettings() {
     if (n && n.trim() && n.trim() !== x.name) run('admin_rename_shop', { p_id: x.id, p_name: n }, 'Renamed ✓');
   });
   const add = document.getElementById('addlogin');
-  if (add) add.onclick = () => run('admin_add_login', {
-    p_name: document.getElementById('ln').value, p_username: document.getElementById('lu').value,
-    p_password: document.getElementById('lp').value, p_is_owner: document.getElementById('lo').checked,
-  }, 'Login added. Give them their username, password and the office link.');
+  if (add) add.onclick = async () => {
+    try {
+      const r = await adminCall('admin_add_login', {
+        p_name: document.getElementById('ln').value, p_username: document.getElementById('lu').value,
+        p_password: document.getElementById('lp').value, p_is_owner: document.getElementById('lo').checked,
+        p_phone: document.getElementById('lph').value, p_email: document.getElementById('lem').value,
+        p_shop: document.getElementById('lsh').value, p_clock: document.getElementById('lc').checked });
+      toast('Login added ✓'); S.shops = null; await loadAdmin();
+      openInvite(Object.assign({ name: r.name, phone: r.phone, email: r.email }, r.employee || {}, { office: r.username }));
+    } catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
+  const loginInvite = (a) => openInvite(Object.assign({ name: a.name, phone: a.phone, email: a.email }, a.employee || {}, { office: a.username }));
+  app.querySelectorAll('[data-linvite]').forEach((b) => b.onclick = () => loginInvite(find(b.dataset.linvite)));
+  app.querySelectorAll('[data-lclock]').forEach((b) => b.onclick = async () => {
+    const a = find(b.dataset.lclock);
+    try { await adminCall('admin_add_clock', { p_id: a.id, p_shop: S.shop }); toast('Time clock added ✓'); await loadAdmin(); loginInvite(S.logins.find((x) => x.id === a.id)); }
+    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  });
+  document.getElementById('myname').onclick = async () => {
+    const n = prompt('Your name (shown on edits and at the top)', S.me.name);
+    if (!n || !n.trim() || n.trim() === S.me.name) return;
+    try { await adminCall('admin_update_my_name', { p_name: n }); S.me = null; toast('Name updated ✓'); await loadAdmin(); }
+    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
+  const mysend = document.getElementById('mysend');
+  if (mysend) mysend.onclick = () => openInvite(Object.assign({}, S.me.employee));
+  const myclock = document.getElementById('myclock');
+  if (myclock) myclock.onclick = async () => {
+    try { await adminCall('admin_add_clock', { p_id: S.me.id, p_shop: S.shop }); S.me = null; toast('Time clock added ✓'); await loadAdmin(); }
+    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
   app.querySelectorAll('[data-lreset]').forEach((b) => b.onclick = () => {
     const a = find(b.dataset.lreset); const pw = prompt(`New password for ${a.name} (6+ characters):`);
     if (pw) run('admin_update_login', { p_id: a.id, p_active: a.active, p_is_owner: a.is_owner, p_new_password: pw }, 'Password reset ✓');
