@@ -38,6 +38,7 @@
   .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
   .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .brand img { height: 46px; width: auto; flex: none; }
+  .brand img.round { height: 52px; width: 52px; border-radius: 50%; object-fit: cover; }
   .eyebrow { font: 700 11px var(--mono); color: var(--accent); letter-spacing: 1.5px; text-transform: uppercase; }
   .who { font: 600 24px/1.1 var(--head); text-transform: uppercase; color: var(--text); letter-spacing: .3px; }
   .who .acc { color: var(--accent); }
@@ -221,8 +222,12 @@ async function rpc(fn, args) {
 
 // ---------- header with logo ----------
 const LOGO = C.LOGO_URL || 'https://2wdieselrepair.com/user/themes/dieselworks/images/logo.png';
-function headHTML(eyebrow, titleHTML, rightHTML) {
-  return `<div class="top"><div class="brand"><img src="${esc(LOGO)}" alt="" onerror="this.remove()">
+const CANYON_LOGO = 'https://canyonlakehydraulics.com/wp-content/uploads/2025/05/logo.png';
+// Each shop shows its own logo (Canyon Lake gets its round badge).
+const logoFor = (shop) => /canyon/i.test(shop || '') ? CANYON_LOGO : LOGO;
+function headHTML(eyebrow, titleHTML, rightHTML, logo) {
+  const src = logo || LOGO;
+  return `<div class="top"><div class="brand"><img src="${esc(src)}" class="${src === CANYON_LOGO ? 'round' : ''}" alt="" onerror="this.remove()">
     <div class="grow"><div class="eyebrow">${esc(eyebrow)}</div><div class="who">${titleHTML}</div></div></div>${rightHTML || ''}</div>`;
 }
 
@@ -365,7 +370,7 @@ function renderEmp() {
   }
 
   app.innerHTML = `
-    ${headHTML(d.employee.shop || C.SHOP_NAME, `Hi, <span class="acc">${esc(d.employee.name.split(' ')[0])}</span>`)}
+    ${headHTML(d.employee.shop || C.SHOP_NAME, `Hi, <span class="acc">${esc(d.employee.name.split(' ')[0])}</span>`, '', logoFor(d.employee.shop))}
     ${bannersHTML()}
     <div class="card clock">
       ${open
@@ -645,7 +650,7 @@ function renderAdmin() {
   const role = S.me.is_owner ? 'Owner' : 'Manager';
   const head = headHTML(S.me.name && S.me.name.toLowerCase() !== role.toLowerCase() ? `${role} · ${S.me.name}` : role,
     S.tab === 'settings' ? 'Office <span class="acc">Settings</span>' : `<span class="acc">${esc(shopName(S.shop) || C.SHOP_NAME)}</span>`,
-    '<button class="btn sm ghost" id="logout">Sign out</button>');
+    '<button class="btn sm ghost" id="logout">Sign out</button>', S.tab === 'settings' ? LOGO : logoFor(shopName(S.shop)));
   app.innerHTML = head + shopbar + tabs + (S.tab === 'crew' ? crewHTML() : S.tab === 'settings' ? settingsHTML() : hoursHTML());
   app.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => { S.tab = b.dataset.tab; loadAdmin(); });
   app.querySelectorAll('[data-shop]').forEach((b) => b.onclick = () => { S.shop = b.dataset.shop; ls.set('tc_shop', S.shop); loadAdmin(); });
