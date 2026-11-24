@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shop Time Clock</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#111418">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Time Clock">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<script src="config.js"></script>
+<style>
+  :root {
+    --bg: #111418; --card: #1b2027; --card2: #232a33; --line: #2e3640;
+    --text: #eef1f4; --muted: #8d98a5; --green: #22c55e; --green-d: #15803d;
+    --red: #ef4444; --red-d: #b91c1c; --amber: #f59e0b; --blue: #3b82f6;
+    --r: 16px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); min-height: 100vh; }
+  #app { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
+  button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+  input { font: inherit; }
+  .top { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 16px; }
+  .top h1 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 0; letter-spacing: .3px; text-transform: uppercase; }
+  .top .who { font-size: 22px; font-weight: 700; color: var(--text); text-transform: none; letter-spacing: 0; }
+  .card { background: var(--card); border-radius: var(--r); padding: 16px; margin-bottom: 14px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .grow { flex: 1; min-width: 0; }
+  .center { text-align: center; }
+
+  .banner { display: flex; gap: 12px; align-items: center; border-radius: var(--r); padding: 12px 14px;
+    margin-bottom: 14px; background: #1e293b; border: 1px solid #334155; }
+  .banner.warn { background: #3a2a0a; border-color: #78501a; }
+  .banner .grow > b { display: block; }
+  .btn { background: var(--card2); border-radius: 12px; padding: 12px 16px; font-weight: 600; }
+  .btn.sm { padding: 8px 12px; font-size: 14px; border-radius: 10px; }
+  .btn.blue { background: var(--blue); }
+  .btn.green { background: var(--green-d); }
+  .btn.red { background: var(--red-d); }
+  .btn.ghost { background: transparent; border: 1px solid var(--line); }
+  .btn.block { display: block; width: 100%; }
+  .btn:disabled { opacity: .5; }
+
+  .clock { text-align: center; padding: 22px 16px 20px; }
+  .bigbtn { width: 210px; height: 210px; border-radius: 50%; font-size: 26px; font-weight: 800;
+    letter-spacing: .5px; color: #fff; display: inline-flex; flex-direction: column; align-items: center;
+    justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,.35); transition: transform .08s; }
+  .bigbtn:active { transform: scale(.96); }
+  .bigbtn.in { background: radial-gradient(circle at 30% 25%, #34d399, var(--green-d)); }
+  .bigbtn.out { background: radial-gradient(circle at 30% 25%, #f87171, var(--red-d)); }
+  .bigbtn small { font-size: 13px; font-weight: 500; opacity: .9; margin-top: 4px; letter-spacing: 0; }
+  .status { margin-top: 14px; font-size: 15px; }
+  .status b { font-size: 20px; }
+
+  .weekhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .arrow { width: 40px; height: 40px; border-radius: 10px; background: var(--card2); font-size: 20px; }
+  .arrow:disabled { opacity: .3; }
+  .wtitle { text-align: center; }
+  .wtitle b { display: block; font-size: 17px; }
+  .total { text-align: center; margin: 10px 0 6px; }
+  .total .num { font-size: 40px; font-weight: 800; letter-spacing: -1px; }
+  .total .unit { color: var(--muted); font-size: 16px; margin-left: 4px; }
+  .day { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent;
+    padding: 12px 4px; border-top: 1px solid var(--line); }
+  .day .dname { width: 82px; font-weight: 600; }
+  .day .dname span { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+  .day .chips { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; font-size: 13px; color: var(--muted); }
+  .chip { background: var(--card2); border-radius: 8px; padding: 3px 7px; color: var(--text); white-space: nowrap; }
+  .chip.open { background: #14532d; }
+  .day .dt { font-weight: 700; min-width: 48px; text-align: right; }
+  .day.today .dname { color: var(--green); }
+  .day .chev { color: var(--muted); }
+  .day.locked .chev { visibility: hidden; }
+  .submitted { color: var(--green); font-weight: 600; }
+
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+  .pill.ok { background: #14532d; color: #86efac; }
+  .pill.no { background: #451a03; color: #fcd34d; }
+  .pill.on { background: #1e3a8a; color: #bfdbfe; }
+  .pill.off { background: var(--card2); color: var(--muted); }
+
+  .tabs { display: flex; background: var(--card); border-radius: 12px; padding: 4px; margin-bottom: 14px; }
+  .tabs button { flex: 1; padding: 10px; border-radius: 9px; background: transparent; font-weight: 600; color: var(--muted); }
+  .tabs button.on { background: var(--card2); color: var(--text); }
+  .emp { display: flex; align-items: center; gap: 10px; width: 100%; background: transparent; text-align: left;
+    padding: 14px 4px; border-top: 1px solid var(--line); }
+  .emp:first-child { border-top: 0; }
+  .emp .hrs { font-weight: 800; font-size: 18px; text-align: right; }
+  .emp .hrs small { display: block; font-size: 11px; font-weight: 600; color: var(--amber); }
+
+  .field { display: block; width: 100%; background: var(--card2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 12px; padding: 13px 14px; font-size: 17px; }
+  .field:focus { outline: 2px solid var(--blue); border-color: transparent; }
+  label.lbl { display: block; font-size: 13px; color: var(--muted); margin: 0 0 6px 2px; }
+
+  /* Bottom sheet */
+  #shade { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 10; }
+  #sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 92vh; overflow: auto; z-index: 11;
+    background: var(--card); border-radius: 20px 20px 0 0; padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
+    transform: translateY(105%); transition: transform .22s ease; max-width: 560px; margin: 0 auto; }
+  #sheet:not(.open) { visibility: hidden; transition: transform .22s ease, visibility 0s .22s; }
+  #sheet.open { transform: none; }
+  .sheethead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .sheethead h2 { margin: 0; font-size: 20px; }
+  .x { width: 36px; height: 36px; border-radius: 50%; background: var(--card2); font-size: 18px; }
+  .entry { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .entry input[type=time] { flex: 1; min-width: 0; background: var(--card2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 12px; padding: 12px 8px; font-size: 18px; text-align: center; -webkit-appearance: none; min-height: 50px; }
+  .entry .dash { color: var(--muted); }
+  .del { width: 44px; height: 50px; border-radius: 12px; background: #3b1515; color: #fca5a5; font-size: 18px; }
+  .hint { font-size: 13px; color: var(--muted); margin: 4px 0 12px; }
+
+  #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(150%);
+    background: #f8fafc; color: #0f172a; padding: 12px 18px; border-radius: 12px; font-weight: 600; z-index: 20;
+    transition: transform .2s, opacity .2s; opacity: 0; max-width: 90vw; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+  #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  #toast.err { background: #fee2e2; color: #7f1d1d; }
+  .spin { text-align: center; padding: 80px 0; color: var(--muted); }
+  .code { font-family: ui-monospace, Menlo, monospace; letter-spacing: 1px; }
+  .crew { padding: 14px 0; border-top: 1px solid var(--line); }
+  .crew:first-child { border-top: 0; }
+  .crew .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  table.mini { width: 100%; border-collapse: collapse; font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="app"><div class="spin">Loading…</div></div>
+<div id="shade"></div>
+<div id="sheet"></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const C = window.TC_CONFIG || {};
+const app = document.getElementById('app');
+
+// ---------- small helpers ----------
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseYmd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d, 12); };
+const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); };
+const weekStartOf = (s) => { const d = parseYmd(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); };
+const fmtDay = (s) => parseYmd(s).toLocaleDateString([], { weekday: 'short' });
+const fmtShort = (s) => parseYmd(s).toLocaleDateString([], { month: 'short', day: 'numeric' });
+const fmtLong = (s) => parseYmd(s).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?AM/i, 'a').replace(/\s?PM/i, 'p');
+const hhmm = (iso) => { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const minsOf = (p) => Math.max(0, ((p.clock_out ? new Date(p.clock_out) : new Date()) - new Date(p.clock_in)) / 60000);
+const hrs = (m) => (m / 60).toFixed(2);
+const hm = (m) => { const t = Math.round(m); return `${Math.floor(t / 60)}h ${pad(t % 60)}m`; };
+const sumMins = (list) => list.reduce((a, p) => a + minsOf(p), 0);
+const todayStr = () => ymd(new Date());
+const ls = {
+  get: (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} },
+  del: (k) => { try { localStorage.removeItem(k); } catch (_) {} },
+};
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isAndroid = /Android/i.test(navigator.userAgent);
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; if (S.data && !ADMIN) renderEmp(); });
+window.addEventListener('appinstalled', () => { installEvt = null; if (S.data && !ADMIN) renderEmp(); });
+const isStandalone = () => window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+
+let toastTimer;
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.className = err ? 'err' : ''; }, err ? 4200 : 2400);
+}
+
+async function rpc(fn, args) {
+  const h = { 'Content-Type': 'application/json', apikey: C.SUPABASE_KEY };
+  if (String(C.SUPABASE_KEY).split('.').length === 3) h.Authorization = 'Bearer ' + C.SUPABASE_KEY; // legacy anon key
+  let r;
+  try {
+    r = await fetch(`${C.SUPABASE_URL}/rest/v1/rpc/${fn}`, { method: 'POST', headers: h, body: JSON.stringify(args || {}) });
+  } catch (e) { throw new Error('No connection. Check your signal and try again.'); }
+  const txt = await r.text();
+  let data = null; try { data = txt ? JSON.parse(txt) : null; } catch (_) {}
+  if (!r.ok) throw new Error((data && (data.message || data.hint)) || `Something went wrong (${r.status})`);
+  return data;
+}
+
+// ---------- bottom sheet ----------
+function openSheet(html) {
+  const sh = document.getElementById('sheet');
+  sh.innerHTML = html; document.getElementById('shade').style.display = 'block';
+  requestAnimationFrame(() => sh.classList.add('open'));
+}
+function closeSheet() {
+  document.getElementById('sheet').classList.remove('open');
+  document.getElementById('shade').style.display = 'none';
+}
+document.getElementById('shade').onclick = closeSheet;
+
+// ---------- startup ----------
+const params = new URLSearchParams(location.search);
+const ADMIN = params.has('admin') || location.hash === '#admin';
+const S = { token: null, adminTok: ls.get('tc_admin'), me: null, data: null, ws: null, tab: 'hours', crew: [], logins: [] };
+
+if (params.get('k')) { S.token = params.get('k').trim().toLowerCase(); ls.set('tc_token', S.token); }
+else S.token = ls.get('tc_token');
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+document.title = C.SHOP_NAME || 'Shop Time Clock';
+
+function start() {
+  if (!C.SUPABASE_URL || /YOUR-PROJECT/.test(C.SUPABASE_URL) || /PASTE/.test(C.SUPABASE_KEY)) {
+    app.innerHTML = `<div class="card"><h2>Almost there</h2><p class="muted">Open <b>config.js</b> and paste in your Supabase URL and key (Setup guide, step 2).</p></div>`;
+    return;
+  }
+  if (ADMIN) return adminStart();
+  if (!S.token) return codeScreen();
+  const ws = location.hash === '#lastweek' ? addDays(weekStartOf(todayStr()), -7) : null;
+  loadEmp(ws);
+}
+
+// =====================================================================
+//  EMPLOYEE
+// =====================================================================
+function codeScreen(msg) {
+  app.innerHTML = `
+    <div class="top"><h1>${esc(C.SHOP_NAME)}</h1></div>
+    <div class="card">
+      <h2 style="margin-top:0">Enter your code</h2>
+      <p class="muted small">Open the link the office texted you, or type the code from it here.</p>
+      ${msg ? `<p style="color:var(--red)">${esc(msg)}</p>` : ''}
+      <input id="code" class="field code" autocomplete="off" autocapitalize="off" placeholder="e.g. 3fa9c21b7e">
+      <div style="height:12px"></div>
+      <button class="btn blue block" id="go">Continue</button>
+    </div>`;
+  document.getElementById('go').onclick = () => {
+    const v = document.getElementById('code').value.trim().toLowerCase();
+    if (!v) return;
+    S.token = v; ls.set('tc_token', v); loadEmp();
+  };
+}
+
+async function loadEmp(ws) {
+  try {
+    S.data = await rpc('emp_week', { p_token: S.token, p_week_start: ws || S.ws || todayStr() });
+    S.ws = S.data.week_start;
+    renderEmp();
+    refreshPushSilently();
+  } catch (e) {
+    if (/not valid/i.test(e.message)) { ls.del('tc_token'); S.token = null; return codeScreen(e.message); }
+    if (!S.data) app.innerHTML = `<div class="card center"><p>${esc(e.message)}</p><button class="btn" onclick="loadEmp()">Try again</button></div>`;
+    else toast(e.message, true);
+  }
+}
+
+function canEdit(date) { return S.data && date >= S.data.editable_from && date <= addDays(S.data.today, 1); }
+
+function bannersHTML() {
+  const d = S.data, out = [];
+  const dow = parseYmd(d.today).getDay(); // 0 Sun .. 6 Sat
+  const lastWs = addDays(weekStartOf(d.today), -7);
+  if (isIOS && !isStandalone()) {
+    out.push(`<div class="banner"><div style="font-size:26px">📲</div><div class="grow"><b>Add this to your Home Screen</b>
+      <span class="small muted">Tap the Share button <span style="font-size:15px">⬆︎</span> below, then <b>Add to Home Screen</b>. Open it from there to get reminders.</span></div></div>`);
+  }
+  if (isAndroid && !isStandalone()) {
+    out.push(`<div class="banner"><div style="font-size:26px">📲</div><div class="grow"><b>Install the app</b>
+      <span class="small muted">${installEvt ? 'Puts Time Clock on your home screen like a regular app.' : 'In Chrome, tap the ⋮ menu (top right), then <b>Add to Home screen</b> or <b>Install app</b>.'}</span></div>
+      ${installEvt ? '<button class="btn sm blue" id="installbtn">Install</button>' : ''}</div>`);
+  }
+  if (isIOS && !isStandalone()) {
+    // iPhone: reminders only work after Add to Home Screen (banner above)
+  } else if ('PushManager' in window && (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !ls.get('tc_push_ok'))) {
+    const denied = typeof Notification !== 'undefined' && Notification.permission === 'denied';
+    out.push(`<div class="banner"><div style="font-size:26px">🔔</div><div class="grow"><b>Turn on reminders</b>
+      <span class="small muted">${denied ? (isAndroid ? 'Notifications are blocked. Tap the icon left of the web address (or long-press the app icon → App info) and allow Notifications.' : 'Notifications are blocked. Turn them on in your phone Settings for this app.') : 'Get a heads-up Monday and Thursday so you never miss payroll.'}</span></div>
+      ${denied ? '' : '<button class="btn sm blue" id="pushbtn">Turn on</button>'}</div>`);
+  }
+  if (dow === 1 && S.ws !== lastWs) {
+    out.push(`<div class="banner warn"><div style="font-size:26px">🗓️</div><div class="grow"><b>Monday check</b><span class="small">Review last week's hours and fill in anything missing.</span></div>
+      <button class="btn sm" data-goweek="${lastWs}">Review</button></div>`);
+  } else if ((dow === 4 || dow === 5) && !d.last_week_submitted && S.ws !== lastWs) {
+    out.push(`<div class="banner warn"><div style="font-size:26px">⏰</div><div class="grow"><b>Time card due${dow === 4 ? ' today' : ''}</b><span class="small">Submit last week's hours for Friday payroll.</span></div>
+      <button class="btn sm" data-goweek="${lastWs}">Open</button></div>`);
+  }
+  return out.join('');
+}
+
+function weekLabel(ws, today) {
+  const cur = weekStartOf(today);
+  if (ws === cur) return 'This week';
+  if (ws === addDays(cur, -7)) return 'Last week';
+  return 'Week of ' + fmtShort(ws);
+}
+
+function renderEmp() {
+  const d = S.data, ws = S.ws, open = d.open_punch;
+  const punches = d.punches;
+  const total = sumMins(punches);
+  const ot = Math.max(0, total - 2400);
+  const weekEditable = addDays(ws, 6) >= d.editable_from;
+  const isFuture = ws > weekStartOf(d.today);
+
+  let days = '';
+  for (let i = 0; i < 7; i++) {
+    const date = addDays(ws, i);
+    const list = punches.filter((p) => p.work_date === date);
+    const chips = list.map((p) => `<span class="chip ${p.clock_out ? '' : 'open'}">${fmtTime(p.clock_in)}–${p.clock_out ? fmtTime(p.clock_out) : 'now'}</span>`).join('');
+    const m = sumMins(list);
+    days += `<button class="day ${date === d.today ? 'today' : ''} ${canEdit(date) ? '' : 'locked'}" data-day="${date}">
+      <div class="dname">${fmtDay(date)}<span>${fmtShort(date)}</span></div>
+      <div class="chips">${chips || (canEdit(date) && date <= d.today ? '<span>Tap to add</span>' : '')}</div>
+      <div class="dt">${m ? hrs(m) : ''}</div><div class="chev">›</div></button>`;
+  }
+
+  let submit = '';
+  if (d.submitted_at) {
+    submit = `<p class="center submitted">✓ Submitted ${esc(fmtShort(ymd(new Date(d.submitted_at))))} at ${esc(fmtTime(d.submitted_at))}</p>
+      ${weekEditable ? '<p class="center small muted">Changing a day will un-submit it so you can send it again.</p>' : ''}`;
+  } else if (weekEditable && !isFuture) {
+    submit = `<button class="btn green block" id="submitbtn" style="margin-top:8px">Submit week for payroll</button>`;
+  } else if (!weekEditable) {
+    submit = `<p class="center small muted">Not submitted · ask the office to change older weeks</p>`;
+  }
+
+  app.innerHTML = `
+    <div class="top"><h1>${esc(C.SHOP_NAME)}<br><span class="who">Hi, ${esc(d.employee.name.split(' ')[0])}</span></h1></div>
+    ${bannersHTML()}
+    <div class="card clock">
+      ${open
+        ? `<button class="bigbtn out" id="clockbtn">CLOCK OUT<small>tap to end shift</small></button>
+           <div class="status">On the clock since <b>${fmtTime(open.clock_in)}</b><br><span class="muted" id="elapsed">${hm(minsOf(open))}</span></div>`
+        : `<button class="bigbtn in" id="clockbtn">CLOCK IN<small>tap to start</small></button>
+           <div class="status muted">You're off the clock</div>`}
+    </div>
+    <div class="card">
+      <div class="weekhead">
+        <button class="arrow" id="prev">‹</button>
+        <div class="wtitle"><b>${weekLabel(ws, d.today)}</b><span class="small muted">${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}</span></div>
+        <button class="arrow" id="next" ${ws >= weekStartOf(d.today) ? 'disabled' : ''}>›</button>
+      </div>
+      <div class="total"><span class="num">${hrs(total)}</span><span class="unit">hrs</span>
+        ${ot ? `<div class="small" style="color:var(--amber)">includes ${hrs(ot)} overtime</div>` : ''}</div>
+      ${days}
+      ${submit}
+    </div>
+    <p class="center small muted">Forgot to clock in or out? Tap the day to type in your times.</p>`;
+
+  document.getElementById('clockbtn').onclick = clockToggle;
+  document.getElementById('prev').onclick = () => loadEmp(addDays(ws, -7));
+  document.getElementById('next').onclick = () => loadEmp(addDays(ws, 7));
+  app.querySelectorAll('[data-day]').forEach((b) => b.onclick = () => {
+    const date = b.dataset.day;
+    if (!canEdit(date)) return toast(date > d.today ? "That day hasn't happened yet" : 'Locked. Ask the office to change it.');
+    openDayEditor({
+      date, name: null,
+      punches: d.punches.filter((p) => p.work_date === date),
+      save: (row) => rpc('emp_save_punch', { p_token: S.token, p_id: row.id, p_work_date: date, p_in: row.in, p_out: row.out, p_note: null }),
+      del: (id) => rpc('emp_delete_punch', { p_token: S.token, p_id: id }),
+      done: () => loadEmp(),
+    });
+  });
+  app.querySelectorAll('[data-goweek]').forEach((b) => b.onclick = () => loadEmp(b.dataset.goweek));
+  const pb = document.getElementById('pushbtn'); if (pb) pb.onclick = enablePush;
+  const ib = document.getElementById('installbtn');
+  if (ib) ib.onclick = async () => { const ev = installEvt; installEvt = null; ev.prompt(); try { await ev.userChoice; } catch (_) {} renderEmp(); };
+  const sb = document.getElementById('submitbtn'); if (sb) sb.onclick = submitWeek;
+}
+
+async function clockToggle() {
+  const btn = document.getElementById('clockbtn'); btn.disabled = true;
+  const wasOpen = !!S.data.open_punch;
+  try {
+    await rpc(wasOpen ? 'emp_clock_out' : 'emp_clock_in', { p_token: S.token });
+    if (navigator.vibrate) navigator.vibrate(40);
+    toast(wasOpen ? 'Clocked out ✓' : 'Clocked in ✓');
+    await loadEmp(weekStartOf(todayStr()));
+  } catch (e) { toast(e.message, true); btn.disabled = false; loadEmp(); }
+}
+
+async function submitWeek() {
+  const d = S.data;
+  const total = hrs(sumMins(d.punches));
+  if (!confirm(`Submit ${total} hours for ${fmtShort(S.ws)} – ${fmtShort(addDays(S.ws, 6))}?`)) return;
+  try {
+    await rpc('emp_submit_week', { p_token: S.token, p_week_start: S.ws });
+    toast('Submitted ✓'); loadEmp();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------- push notifications ----------
+function b64ToBytes(b64) {
+  const p = '='.repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+async function enablePush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return toast(isIOS ? 'Add to Home Screen first, then open it from there.' : "This browser can't do notifications.", true);
+  }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return toast('Notifications were not allowed.', true);
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(C.VAPID_PUBLIC_KEY) });
+    await rpc('emp_save_push', { p_token: S.token, p_sub: sub.toJSON() });
+    ls.set('tc_push_ok', '1');
+    toast('Reminders are on ✓');
+    renderEmp();
+  } catch (e) { toast('Could not turn on reminders: ' + e.message, true); }
+}
+let pushRefreshed = false;
+async function refreshPushSilently() {
+  if (pushRefreshed || typeof Notification === 'undefined' || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return;
+  pushRefreshed = true;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(C.VAPID_PUBLIC_KEY) });
+    await rpc('emp_save_push', { p_token: S.token, p_sub: sub.toJSON() });
+    if (!ls.get('tc_push_ok')) { ls.set('tc_push_ok', '1'); renderEmp(); }
+  } catch (_) {}
+}
+
+// =====================================================================
+//  DAY EDITOR (shared by employee + admin)
+// =====================================================================
+function openDayEditor(cfg) {
+  const rows = cfg.punches.map((p) => ({ id: p.id, start: hhmm(p.clock_in), end: p.clock_out ? hhmm(p.clock_out) : '', orig: p }));
+  const removed = [];
+  if (!rows.length) rows.push({ id: null, start: '08:00', end: '17:00' });
+
+  const toIso = (date, t) => new Date(`${date}T${t}:00`).toISOString();
+  function rowMins(r) {
+    if (!r.start || !r.end) return 0;
+    let a = new Date(`${cfg.date}T${r.start}:00`), b = new Date(`${cfg.date}T${r.end}:00`);
+    if (b <= a) b = new Date(b.getTime() + 86400000);
+    return (b - a) / 60000;
+  }
+  function draw() {
+    const tot = rows.reduce((a, r) => a + rowMins(r), 0);
+    openSheet(`
+      <div class="sheethead"><div><h2>${esc(fmtLong(cfg.date))}</h2>${cfg.name ? `<div class="small muted">${esc(cfg.name)}</div>` : ''}</div><button class="x" id="sx">✕</button></div>
+      <div class="hint">Start and end times. Took lunch? Use two lines (before lunch and after).</div>
+      <div id="rows">${rows.map((r, i) => `
+        <div class="entry">
+          <input type="time" data-i="${i}" data-k="start" value="${r.start}">
+          <span class="dash">to</span>
+          <input type="time" data-i="${i}" data-k="end" value="${r.end}">
+          <button class="del" data-del="${i}" aria-label="Remove">🗑</button>
+        </div>`).join('')}</div>
+      <button class="btn ghost block" id="addrow">＋ Add time</button>
+      <div class="total" style="margin:16px 0"><span class="num" style="font-size:30px" id="daytot">${hrs(tot)}</span><span class="unit">hrs</span></div>
+      <button class="btn green block" id="saveday">Save</button>`);
+    const sh = document.getElementById('sheet');
+    sh.querySelector('#sx').onclick = closeSheet;
+    sh.querySelectorAll('input[type=time]').forEach((inp) => inp.oninput = () => {
+      rows[inp.dataset.i][inp.dataset.k] = inp.value;
+      document.getElementById('daytot').textContent = hrs(rows.reduce((a, r) => a + rowMins(r), 0));
+    });
+    sh.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => {
+      const [r] = rows.splice(Number(b.dataset.del), 1); if (r.id) removed.push(r.id); draw();
+    });
+    sh.querySelector('#addrow').onclick = () => {
+      const last = rows[rows.length - 1];
+      let s = '08:00', e = '';
+      if (last && last.end) { const [h, m] = last.end.split(':').map(Number); const t = h * 60 + m + 30; s = pad(Math.floor(t / 60) % 24) + ':' + pad(t % 60); }
+      rows.push({ id: null, start: s, end: e }); draw();
+    };
+    sh.querySelector('#saveday').onclick = save;
+  }
+  async function save() {
+    const btn = document.getElementById('saveday');
+    for (const r of rows) {
+      if (!r.start) return toast('Every line needs a start time.', true);
+      if (!r.end && !(r.orig && !r.orig.clock_out)) return toast('Every line needs an end time.', true);
+    }
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      for (const id of removed) await cfg.del(id);
+      for (const r of rows) {
+        const inIso = toIso(cfg.date, r.start);
+        let outIso = null;
+        if (r.end) {
+          outIso = toIso(cfg.date, r.end);
+          if (new Date(outIso) <= new Date(inIso)) outIso = new Date(new Date(outIso).getTime() + 86400000).toISOString();
+        }
+        const o = r.orig;
+        const changed = !o || new Date(o.clock_in).getTime() !== new Date(inIso).getTime() ||
+          (o.clock_out ? new Date(o.clock_out).getTime() : null) !== (outIso ? new Date(outIso).getTime() : null);
+        if (changed) await cfg.save({ id: r.id, in: inIso, out: outIso });
+      }
+      closeSheet(); toast('Saved ✓'); cfg.done();
+    } catch (e) { toast(e.message, true); btn.disabled = false; btn.textContent = 'Save'; cfg.done(); }
+  }
+  draw();
+}
+
+// =====================================================================
+//  ADMIN
+// =====================================================================
+function adminStart() {
+  if (!S.adminTok) return adminLogin();
+  loadAdmin();
+}
+
+function adminLogin(msg) {
+  app.innerHTML = `
+    <div class="top"><h1>${esc(C.SHOP_NAME)}<br><span class="who">Office</span></h1></div>
+    <div class="card">
+      <h2 style="margin-top:0">Office sign in</h2>
+      ${msg ? `<p style="color:var(--red)">${esc(msg)}</p>` : ''}
+      <input id="un" class="field" placeholder="Username" autocomplete="username" autocapitalize="off" autocorrect="off">
+      <div style="height:10px"></div>
+      <input id="pw" type="password" class="field" placeholder="Password" autocomplete="current-password">
+      <div style="height:12px"></div>
+      <button class="btn blue block" id="go">Sign in</button>
+    </div>`;
+  const go = async () => {
+    try {
+      S.adminTok = await rpc('admin_login', { p_username: document.getElementById('un').value, p_password: document.getElementById('pw').value });
+      ls.set('tc_admin', S.adminTok); S.me = null; loadAdmin();
+    } catch (e) { adminLogin(e.message); }
+  };
+  document.getElementById('go').onclick = go;
+  document.getElementById('pw').onkeydown = (e) => { if (e.key === 'Enter') go(); };
+}
+
+async function adminCall(fn, args) {
+  try { return await rpc(fn, Object.assign({ p_tok: S.adminTok }, args)); }
+  catch (e) {
+    if (/ADMIN_LOGIN_REQUIRED/.test(e.message)) { ls.del('tc_admin'); S.adminTok = null; S.me = null; adminLogin('Please sign in again.'); throw new Error('_silent'); }
+    throw e;
+  }
+}
+
+async function loadAdmin(ws) {
+  try {
+    if (!S.me) S.me = await adminCall('admin_me', {});
+    if (S.tab === 'crew') { S.crew = await adminCall('admin_employees', {}); }
+    else if (S.tab === 'settings') { S.logins = S.me.is_owner ? await adminCall('admin_logins', {}) : []; }
+    else { S.data = await adminCall('admin_week', { p_week_start: ws || S.ws || todayStr() }); S.ws = S.data.week_start; }
+    renderAdmin();
+  } catch (e) { if (e.message !== '_silent') toast(e.message, true); }
+}
+
+function empWeek(id) {
+  const list = S.data.punches.filter((p) => p.employee_id === id);
+  const total = sumMins(list);
+  return { list, total, ot: Math.max(0, total - 2400), open: list.some((p) => !p.clock_out), submitted: S.data.submissions[id] };
+}
+
+function renderAdmin() {
+  const t = (k, l) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}</button>`;
+  const tabs = `<div class="tabs">${t('hours', 'Hours')}${t('crew', 'Crew')}${t('settings', 'Settings')}</div>`;
+  const head = `<div class="top"><h1>${esc(C.SHOP_NAME)}<br><span class="who">${esc(S.me.name.split(' ')[0])}</span>
+    <span class="pill ${S.me.is_owner ? 'ok' : 'on'}" style="vertical-align:middle;margin-left:4px">${S.me.is_owner ? 'Owner' : 'Manager'}</span></h1>
+    <button class="btn sm ghost" id="logout">Sign out</button></div>`;
+  app.innerHTML = head + tabs + (S.tab === 'crew' ? crewHTML() : S.tab === 'settings' ? settingsHTML() : hoursHTML());
+  app.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => { S.tab = b.dataset.tab; loadAdmin(); });
+  document.getElementById('logout').onclick = async () => {
+    try { await rpc('admin_logout', { p_tok: S.adminTok }); } catch (_) {}
+    ls.del('tc_admin'); S.adminTok = null; S.me = null; adminLogin();
+  };
+  S.tab === 'crew' ? wireCrew() : S.tab === 'settings' ? wireSettings() : wireHours();
+}
+
+function hoursHTML() {
+  const d = S.data, ws = S.ws;
+  const rows = d.employees.map((e) => {
+    const w = empWeek(e.id);
+    const pastOrCurrent = ws <= weekStartOf(d.today);
+    const pill = w.open ? '<span class="pill on">On the clock</span>'
+      : w.submitted ? '<span class="pill ok">✓ Submitted</span>'
+      : pastOrCurrent ? '<span class="pill no">Not submitted</span>' : '';
+    return `<button class="emp" data-emp="${e.id}">
+      <div class="grow"><b>${esc(e.name)}</b>${e.active ? '' : ' <span class="pill off">inactive</span>'}<div style="margin-top:4px">${pill}</div></div>
+      <div class="hrs">${hrs(w.total)}${w.ot ? `<small>${hrs(w.ot)} OT</small>` : ''}</div><div class="muted">›</div></button>`;
+  }).join('');
+  const all = sumMins(d.punches);
+  const subCount = d.employees.filter((e) => d.submissions[e.id]).length;
+  return `
+    <div class="card">
+      <div class="weekhead">
+        <button class="arrow" id="prev">‹</button>
+        <div class="wtitle"><b>${weekLabel(ws, d.today)}</b><span class="small muted">${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}, ${parseYmd(addDays(ws, 6)).getFullYear()}</span></div>
+        <button class="arrow" id="next" ${ws >= weekStartOf(d.today) ? 'disabled' : ''}>›</button>
+      </div>
+      <div class="row small muted" style="justify-content:space-between;margin:8px 2px 4px">
+        <span>${subCount} of ${d.employees.length} submitted</span><span>${hrs(all)} hrs total</span></div>
+    </div>
+    <div class="card" style="padding-top:4px;padding-bottom:4px">${rows || '<p class="muted center">No employees yet. Add them on the Crew tab.</p>'}</div>
+    <button class="btn block ghost" id="csv">⬇︎ Download payroll CSV</button>`;
+}
+
+function wireHours() {
+  document.getElementById('prev').onclick = () => loadAdmin(addDays(S.ws, -7));
+  document.getElementById('next').onclick = () => loadAdmin(addDays(S.ws, 7));
+  document.getElementById('csv').onclick = exportCSV;
+  app.querySelectorAll('[data-emp]').forEach((b) => b.onclick = () => openEmpDetail(b.dataset.emp));
+}
+
+function openEmpDetail(id) {
+  const e = S.data.employees.find((x) => x.id === id);
+  const w = empWeek(id), ws = S.ws;
+  let days = '';
+  for (let i = 0; i < 7; i++) {
+    const date = addDays(ws, i);
+    const list = w.list.filter((p) => p.work_date === date);
+    const m = sumMins(list);
+    days += `<button class="day" data-aday="${date}">
+      <div class="dname">${fmtDay(date)}<span>${fmtShort(date)}</span></div>
+      <div class="chips">${list.map((p) => `<span class="chip ${p.clock_out ? '' : 'open'}">${fmtTime(p.clock_in)}–${p.clock_out ? fmtTime(p.clock_out) : 'now'}</span>`).join('')}
+        ${[...new Set(list.map((p) => p.edited_by).filter(Boolean))].map((n) => `<span style="width:100%;font-size:12px;color:var(--amber)">✎ changed by ${esc(n)}</span>`).join('')}</div>
+      <div class="dt">${m ? hrs(m) : ''}</div><div class="chev">›</div></button>`;
+  }
+  openSheet(`
+    <div class="sheethead"><div><h2>${esc(e.name)}</h2><div class="small muted">${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}</div></div><button class="x" id="sx">✕</button></div>
+    <div class="total"><span class="num">${hrs(w.total)}</span><span class="unit">hrs</span>
+      <div class="small muted">${hrs(Math.min(w.total, 2400))} regular · <span style="color:${w.ot ? 'var(--amber)' : 'inherit'}">${hrs(w.ot)} overtime</span></div></div>
+    ${days}
+    <div style="height:12px"></div>
+    ${w.submitted
+      ? `<div class="row"><span class="grow submitted">✓ Submitted ${esc(fmtShort(ymd(new Date(w.submitted))))} ${esc(fmtTime(w.submitted))}</span><button class="btn sm ghost" id="unsub">Send back</button></div>`
+      : `<div class="row"><span class="grow muted">Not submitted yet</span><button class="btn sm green" id="sub">Mark submitted</button></div>`}
+  `);
+  const sh = document.getElementById('sheet');
+  sh.querySelector('#sx').onclick = closeSheet;
+  const setSub = async (v) => {
+    try { await adminCall('admin_set_submitted', { p_employee_id: id, p_week_start: ws, p_submitted: v }); await loadAdmin(); openEmpDetail(id); }
+    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
+  const sb = sh.querySelector('#sub'); if (sb) sb.onclick = () => setSub(true);
+  const ub = sh.querySelector('#unsub'); if (ub) ub.onclick = () => setSub(false);
+  sh.querySelectorAll('[data-aday]').forEach((b) => b.onclick = () => {
+    const date = b.dataset.aday;
+    openDayEditor({
+      date, name: e.name,
+      punches: w.list.filter((p) => p.work_date === date),
+      save: (row) => adminCall('admin_save_punch', { p_id: row.id, p_employee_id: id, p_work_date: date, p_in: row.in, p_out: row.out, p_note: null }),
+      del: (pid) => adminCall('admin_delete_punch', { p_id: pid }),
+      done: async () => { await loadAdmin(); },
+    });
+  });
+}
+
+function exportCSV() {
+  const d = S.data, ws = S.ws, we = addDays(ws, 6);
+  const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const dayHead = [...Array(7)].map((_, i) => `${fmtDay(addDays(ws, i))} ${addDays(ws, i)}`);
+  const lines = [['Employee', 'Week Start', 'Week End', ...dayHead, 'Total Hours', 'Regular', 'Overtime', 'Submitted'].map(q).join(',')];
+  for (const e of d.employees) {
+    const w = empWeek(e.id);
+    const per = [...Array(7)].map((_, i) => hrs(sumMins(w.list.filter((p) => p.work_date === addDays(ws, i)))));
+    lines.push([e.name, ws, we, ...per, hrs(w.total), hrs(Math.min(w.total, 2400)), hrs(w.ot),
+      w.submitted ? new Date(w.submitted).toLocaleString() : 'No'].map(q).join(','));
+  }
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `timecards_${ws}_to_${we}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+// ---------- crew ----------
+const linkFor = (tok) => location.origin + location.pathname.replace(/index\.html$/, '') + '?k=' + tok;
+
+function crewHTML() {
+  const list = S.crew.map((e) => `
+    <div class="crew">
+      <div class="row"><div class="grow"><b>${esc(e.name)}</b> ${e.active ? '' : '<span class="pill off">inactive</span>'}
+        <div class="small muted">Code <span class="code">${esc(e.token)}</span> · ${e.push ? '🔔 reminders on' : '🔕 reminders off'}</div></div></div>
+      <div class="btns">
+        ${e.active ? `<button class="btn sm blue" data-share="${e.id}">Text link</button>
+        <button class="btn sm" data-copy="${e.id}">Copy link</button>` : ''}
+        <button class="btn sm ghost" data-rename="${e.id}">Rename</button>
+        <button class="btn sm ghost" data-newlink="${e.id}">New link</button>
+        <button class="btn sm ghost" data-toggle="${e.id}">${e.active ? 'Deactivate' : 'Reactivate'}</button>
+      </div>
+    </div>`).join('');
+  return `
+    <div class="card">
+      <label class="lbl">Add an employee</label>
+      <div class="row"><input id="newname" class="field grow" placeholder="Name" autocomplete="off"><button class="btn green" id="addemp">Add</button></div>
+    </div>
+    <div class="card">${list || '<p class="muted center">No one yet.</p>'}</div>`;
+}
+
+async function shareLink(e) {
+  const url = linkFor(e.token);
+  const text = `Hi ${e.name.split(' ')[0]}, here's your time clock link:\n${url}\n\niPhone: open it in Safari, tap Share ⬆︎ → "Add to Home Screen", then open it from your Home Screen and tap "Turn on reminders".\nAndroid: open it in Chrome, tap "Install" (or ⋮ menu → Add to Home screen) and tap "Turn on reminders".`;
+  if (navigator.share) {
+    try { await navigator.share({ text }); return; } catch (err) { if (err.name === 'AbortError') return; }
+  }
+  location.href = (isIOS ? 'sms:&body=' : 'sms:?body=') + encodeURIComponent(text);
+}
+
+function wireCrew() {
+  const find = (id) => S.crew.find((x) => x.id === id);
+  const add = async () => {
+    const name = document.getElementById('newname').value.trim();
+    if (!name) return;
+    try { const e = await adminCall('admin_add_employee', { p_name: name }); toast(`${e.name} added`); await loadAdmin(); }
+    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
+  document.getElementById('addemp').onclick = add;
+  document.getElementById('newname').onkeydown = (ev) => { if (ev.key === 'Enter') add(); };
+  app.querySelectorAll('[data-share]').forEach((b) => b.onclick = () => shareLink(find(b.dataset.share)));
+  app.querySelectorAll('[data-copy]').forEach((b) => b.onclick = async () => {
+    try { await navigator.clipboard.writeText(linkFor(find(b.dataset.copy).token)); toast('Link copied'); }
+    catch (_) { prompt('Copy this link:', linkFor(find(b.dataset.copy).token)); }
+  });
+  app.querySelectorAll('[data-rename]').forEach((b) => b.onclick = async () => {
+    const e = find(b.dataset.rename); const n = prompt('Name', e.name);
+    if (!n || n.trim() === e.name) return;
+    try { await adminCall('admin_update_employee', { p_id: e.id, p_name: n, p_active: e.active }); loadAdmin(); }
+    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  });
+  app.querySelectorAll('[data-newlink]').forEach((b) => b.onclick = async () => {
+    const e = find(b.dataset.newlink);
+    if (!confirm(`Make a new link for ${e.name}? Their old link stops working and they'll need to add the new one to their Home Screen.`)) return;
+    try { await adminCall('admin_new_link', { p_id: e.id }); toast('New link made. Text it to them.'); loadAdmin(); }
+    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  });
+  app.querySelectorAll('[data-toggle]').forEach((b) => b.onclick = async () => {
+    const e = find(b.dataset.toggle);
+    if (e.active && !confirm(`Deactivate ${e.name}? Their link stops working. Their past hours are kept.`)) return;
+    try { await adminCall('admin_update_employee', { p_id: e.id, p_name: e.name, p_active: !e.active }); loadAdmin(); }
+    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  });
+}
+
+// ---------- settings (my password; owner manages office logins) ----------
+const officeLink = () => location.origin + location.pathname.replace(/index\.html$/, '') + '?admin';
+
+function settingsHTML() {
+  const me = S.me;
+  const logins = (S.logins || []).map((a) => `
+    <div class="crew">
+      <div class="row"><div class="grow"><b>${esc(a.name)}</b>
+        <span class="pill ${a.is_owner ? 'ok' : 'on'}">${a.is_owner ? 'Owner' : 'Manager'}</span>
+        ${a.active ? '' : '<span class="pill off">turned off</span>'}
+        <div class="small muted">Username: <span class="code">${esc(a.username)}</span>${a.id === me.id ? ' · you' : ''}</div></div></div>
+      ${a.id === me.id ? '' : `<div class="btns">
+        <button class="btn sm ghost" data-lreset="${a.id}">Reset password</button>
+        <button class="btn sm ghost" data-lrole="${a.id}">${a.is_owner ? 'Make manager' : 'Make owner'}</button>
+        <button class="btn sm ${a.active ? 'red' : 'green'}" data-lactive="${a.id}">${a.active ? 'Turn off' : 'Turn on'}</button>
+      </div>`}
+    </div>`).join('');
+  return `
+    <div class="card">
+      <b>Signed in as ${esc(me.name)}</b>
+      <div class="small muted">Username <span class="code">${esc(me.username)}</span> · ${me.is_owner ? 'Owner (can manage office logins)' : 'Manager'}</div>
+    </div>
+    ${me.is_owner ? `
+    <div class="card">
+      <b>Office logins</b>
+      <p class="small muted" style="margin:4px 0 6px">Everyone who can see hours and edit time cards. Turning a login off signs that person out everywhere.</p>
+      ${logins}
+    </div>
+    <div class="card">
+      <b>Add an office login</b>
+      <div style="height:10px"></div>
+      <input id="ln" class="field" placeholder="Name (e.g. Ken)" autocomplete="off"><div style="height:8px"></div>
+      <input id="lu" class="field" placeholder="Username" autocapitalize="off" autocorrect="off" autocomplete="off"><div style="height:8px"></div>
+      <input id="lp" class="field" placeholder="Starting password (6+ characters)" autocomplete="new-password"><div style="height:10px"></div>
+      <label class="row small" style="gap:8px;margin-bottom:12px"><input type="checkbox" id="lo" style="width:20px;height:20px"> Make this an owner login (can manage logins)</label>
+      <button class="btn green block" id="addlogin">Add login</button>
+    </div>` : ''}
+    <div class="card">
+      <b>Change my password</b>
+      <div style="height:10px"></div>
+      <input id="pold" type="password" class="field" placeholder="Current password" autocomplete="current-password"><div style="height:8px"></div>
+      <input id="pnew" type="password" class="field" placeholder="New password (6+ characters)" autocomplete="new-password"><div style="height:10px"></div>
+      <button class="btn block" id="chpw">Update password</button>
+    </div>
+    <div class="card small muted">
+      <b style="color:var(--text)">Office link</b><br>Bookmark it or add it to your Home Screen. Anyone with an office login uses this same link:<br>
+      <span class="code" style="color:var(--text);word-break:break-all">${esc(officeLink())}</span>
+      <div style="height:8px"></div><button class="btn sm" id="copyoffice">Copy link</button>
+    </div>`;
+}
+
+function wireSettings() {
+  const run = async (fn, args, ok) => {
+    try { await adminCall(fn, args); if (ok) toast(ok); await loadAdmin(); }
+    catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
+  const find = (id) => S.logins.find((x) => x.id === id);
+  document.getElementById('chpw').onclick = () => run('admin_change_my_password',
+    { p_old: document.getElementById('pold').value, p_new: document.getElementById('pnew').value }, 'Password updated ✓');
+  document.getElementById('copyoffice').onclick = async () => {
+    try { await navigator.clipboard.writeText(officeLink()); toast('Link copied'); } catch (_) { prompt('Copy this link:', officeLink()); }
+  };
+  const add = document.getElementById('addlogin');
+  if (add) add.onclick = () => run('admin_add_login', {
+    p_name: document.getElementById('ln').value, p_username: document.getElementById('lu').value,
+    p_password: document.getElementById('lp').value, p_is_owner: document.getElementById('lo').checked,
+  }, 'Login added. Give them their username, password and the office link.');
+  app.querySelectorAll('[data-lreset]').forEach((b) => b.onclick = () => {
+    const a = find(b.dataset.lreset); const pw = prompt(`New password for ${a.name} (6+ characters):`);
+    if (pw) run('admin_update_login', { p_id: a.id, p_active: a.active, p_is_owner: a.is_owner, p_new_password: pw }, 'Password reset ✓');
+  });
+  app.querySelectorAll('[data-lrole]').forEach((b) => b.onclick = () => {
+    const a = find(b.dataset.lrole);
+    if (confirm(a.is_owner ? `Make ${a.name} a manager? They won't be able to manage logins.` : `Make ${a.name} an owner? They'll be able to add and remove office logins.`))
+      run('admin_update_login', { p_id: a.id, p_active: a.active, p_is_owner: !a.is_owner, p_new_password: null });
+  });
+  app.querySelectorAll('[data-lactive]').forEach((b) => b.onclick = () => {
+    const a = find(b.dataset.lactive);
+    if (!a.active || confirm(`Turn off ${a.name}'s login? They'll be signed out right away.`))
+      run('admin_update_login', { p_id: a.id, p_active: !a.active, p_is_owner: a.is_owner, p_new_password: null });
+  });
+}
+
+// ---------- keep fresh ----------
+setInterval(() => {
+  const el = document.getElementById('elapsed');
+  if (el && S.data && S.data.open_punch) el.textContent = hm(minsOf(S.data.open_punch));
+}, 15000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || document.getElementById('sheet').classList.contains('open')) return;
+  if (ADMIN) { if (S.adminTok && (S.data || S.crew.length)) loadAdmin(); }
+  else if (S.token && S.data) loadEmp();
+});
+
+start();
+</script>
+</body>
+</html>
