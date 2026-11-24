@@ -763,7 +763,8 @@ function openInvite(e) {
     <div class="sheethead"><div><h2>Invite ${esc(e.name.split(' ')[0])}</h2><div class="small muted code">${esc([e.token ? shopName(e.shop_id) : '', e.office ? 'office login: ' + e.office : ''].filter(Boolean).join(' · '))}</div></div><button class="x" id="sx">✕</button></div>
     <label class="lbl">Email</label>
     <input id="iemail" class="field" type="email" value="${esc(e.email || '')}" placeholder="name@email.com" autocapitalize="off"><div style="height:14px"></div>
-    <a class="opt" id="imail" href="#"><span class="ic">✉️</span><span class="grow"><b>Send email</b><span class="small muted">Opens your email app with the link ready to send</span></span></a>
+    <a class="opt" id="igmail" href="#" target="_blank" rel="noopener"><span class="ic">📧</span><span class="grow"><b>Send with Gmail</b><span class="small muted">Opens Gmail with everything filled in. Then hit Send.</span></span></a>
+    <a class="opt" id="imail" href="#"><span class="ic">✉️</span><span class="grow"><b>Send with my email app</b><span class="small muted">Outlook, Apple Mail, etc. Then hit Send.</span></span></a>
     <button class="opt" id="icopy"><span class="ic">🔗</span><span class="grow"><b>Copy link</b><span class="small muted">Paste it anywhere</span></span></button>`);
   draw();
   const sh = document.getElementById('sheet');
@@ -778,19 +779,22 @@ function openInvite(e) {
     }
     return { email };
   };
-  const mA = sh.querySelector('#imail'), iEm = sh.querySelector('#iemail');
+  const mA = sh.querySelector('#imail'), gA = sh.querySelector('#igmail'), iEm = sh.querySelector('#iemail');
   const subject = e.token ? `Your ${shopName(e.shop_id) || C.SHOP_NAME} time clock link` : `Your ${C.SHOP_NAME} office login`;
   const refresh = () => {
     const em = iEm.value.trim();
-    mA.href = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)
-      ? `mailto:${encodeURIComponent(em)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteText(e))}` : '#';
+    const ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em);
+    mA.href = ok ? `mailto:${encodeURIComponent(em)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteText(e))}` : '#';
+    gA.href = ok ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(em)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteText(e))}` : '#';
   };
   iEm.oninput = refresh; refresh();
   // Real link (not script-opened) so phones and computers always hand off to the email app.
-  mA.onclick = (ev) => {
-    if (mA.getAttribute('href') === '#') { ev.preventDefault(); return toast('Type in a valid email first.', true); }
+  const sendClick = (a) => (ev) => {
+    if (a.getAttribute('href') === '#') { ev.preventDefault(); return toast('Type in a valid email first.', true); }
     saveContact();
+    setTimeout(() => toast('Nothing goes out until you hit Send in the email that opened.'), 600);
   };
+  mA.onclick = sendClick(mA); gA.onclick = sendClick(gA);
   sh.querySelector('#icopy').onclick = async () => {
     await saveContact();
     const link = e.token ? linkFor(e.token) : officeLink();
