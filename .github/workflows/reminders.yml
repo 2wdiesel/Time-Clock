@@ -1,0 +1,45 @@
+name: Time card reminders
+
+on:
+  schedule:
+    # Mondays and Thursdays, every hour 12:00–16:00 UTC (6–11 AM shop time).
+    # The script sends once, on the first run at or after 7 AM Central.
+    - cron: '0 12-16 * * 1,4'
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: 'Which reminder to send now: test, mon, or thu'
+        required: true
+        default: test
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        working-directory: push
+        run: npm install --no-save --no-audit --no-fund web-push@3
+      - name: Send reminders
+        working-directory: push
+        run: node send.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT || 'mailto:office@example.com' }}
+          KIND: ${{ github.event.inputs.kind }}
+      # GitHub pauses scheduled jobs after 60 days with no repo activity.
+      # Re-enabling the workflow on every run keeps the reminders going.
+      - name: Keep schedule alive
+        if: always()
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/reminders.yml/enable" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
