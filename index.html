@@ -1095,7 +1095,8 @@ function settingsHTML() {
         ${a.active ? '' : '<span class="pill off">turned off</span>'}
         <div class="small muted">Username: <span class="code">${esc(a.username)}</span>${a.id === me.id ? ' · you' : ''}</div>
         <div class="contact">${a.email ? '✉️ ' + esc(a.email) : ''}${a.employee ? `${a.email ? ' · ' : ''}⏱ clocks in at ${esc(shopName(a.employee.shop_id))}` : ''}</div></div></div>
-      ${a.id === me.id ? '' : `<div class="btns">
+      ${a.id === me.id ? `<div class="btns"><button class="btn sm ghost" data-ledit="${a.id}">Edit</button></div>` : `<div class="btns">
+        <button class="btn sm ghost" data-ledit="${a.id}">Edit</button>
         ${a.active ? `<button class="btn sm blue" data-linvite="${a.id}">Send invite</button>` : ''}
         ${a.active && !a.employee ? `<button class="btn sm ghost" data-lclock="${a.id}">Add time clock</button>` : ''}
         <button class="btn sm ghost" data-lreset="${a.id}">Reset password</button>
@@ -1164,6 +1165,51 @@ function settingsHTML() {
     </div>`;
 }
 
+function openLoginEdit(id) {
+  const a = S.logins.find((x) => x.id === id);
+  const self = a.id === S.me.id;
+  const clock = a.employee;
+  const targets = S.logins.filter((x) => x.id !== a.id && !x.employee);
+  const same = targets.find((x) => x.name.trim().toLowerCase() === a.name.trim().toLowerCase());
+  const moveOpts = clock ? [`<option value="">Keep it on the Crew tab (no office login)</option>`]
+    .concat(targets.map((x) => `<option value="${x.id}" ${same && same.id === x.id ? 'selected' : ''}>Move it to ${esc(x.name)} (${esc(x.username)})</option>`)).join('') : '';
+  openSheet(`
+    <div class="sheethead"><div><h2>Edit login</h2><div class="small muted code">${esc(a.name)} · ${esc(a.username)}${self ? ' · you' : ''}</div></div><button class="x" id="sx">✕</button></div>
+    <label class="lbl">Name</label>
+    <input id="len" class="field" value="${esc(a.name)}" autocomplete="off"><div style="height:10px"></div>
+    <label class="lbl">Username</label>
+    <input id="leu" class="field" value="${esc(a.username)}" autocapitalize="off" autocorrect="off" autocomplete="off">
+    <div class="small muted" style="margin:4px 2px 0">This is what they type to sign in. Their password stays the same.</div>
+    <div style="height:14px"></div>
+    <button class="btn green block" id="lesave">Save</button>
+    ${self ? `<p class="small muted" style="margin:16px 2px 0">You can't delete the login you're signed in with. To remove it, sign in with another owner login.</p>` : `
+    <div style="height:22px"></div>
+    <label class="lbl">Delete this login</label>
+    <p class="small muted" style="margin:0 0 8px">${esc(a.name)} won't be able to sign in to the office page anymore. Time cards and hours are never deleted.</p>
+    ${clock ? `<label class="small muted">This login has a time clock (${esc(clock.name)}, ${esc(shopName(clock.shop_id))})</label>
+      <select id="lemove" class="field" style="margin:4px 0 10px">${moveOpts}</select>` : ''}
+    <button class="btn red block" id="ledel">Delete ${esc(a.name)} (${esc(a.username)})</button>`}`);
+  document.getElementById('sx').onclick = closeSheet;
+  document.getElementById('lesave').onclick = async () => {
+    try {
+      await adminCall('admin_edit_login', { p_id: a.id, p_name: document.getElementById('len').value, p_username: document.getElementById('leu').value });
+      closeSheet(); toast('Login updated ✓'); if (self) S.me = null; await loadAdmin();
+    } catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
+  const del = document.getElementById('ledel');
+  if (del) del.onclick = async () => {
+    const mv = document.getElementById('lemove');
+    const to = mv && mv.value ? S.logins.find((x) => x.id === mv.value) : null;
+    const msg = `Delete the office login ${a.name} (${a.username})? This can't be undone.` +
+      (clock ? (to ? `\n\nTheir time clock and hours will move to ${to.name} (${to.username}).` : `\n\nTheir time clock and hours stay on the Crew tab.`) : '');
+    if (!confirm(msg)) return;
+    try {
+      await adminCall('admin_delete_login', { p_id: a.id, p_move_clock_to: to ? to.id : null });
+      closeSheet(); toast('Login deleted ✓'); S.me = null; await loadAdmin();
+    } catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
+}
+
 function wireSettings() {
   const run = async (fn, args, ok) => {
     try { await adminCall(fn, args); if (ok) toast(ok); S.shops = null; await loadAdmin(); }
@@ -1216,6 +1262,7 @@ function wireSettings() {
     try { await adminCall('admin_add_clock', { p_id: S.me.id, p_shop: S.shop }); S.me = null; toast('Time clock added ✓'); await loadAdmin(); }
     catch (err) { if (err.message !== '_silent') toast(err.message, true); }
   };
+  app.querySelectorAll('[data-ledit]').forEach((b) => b.onclick = () => openLoginEdit(b.dataset.ledit));
   app.querySelectorAll('[data-lreset]').forEach((b) => b.onclick = () => {
     const a = find(b.dataset.lreset); const pw = prompt(`New password for ${a.name} (6+ characters):`);
     if (pw) run('admin_update_login', { p_id: a.id, p_active: a.active, p_is_owner: a.is_owner, p_new_password: pw }, 'Password reset ✓');
