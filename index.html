@@ -630,7 +630,11 @@ async function loadAdmin(ws) {
       S.logins = S.me.is_owner ? await adminCall('admin_logins', {}) : [];
       S.shops = await adminCall('admin_shops', {});
     }
-    else { S.data = await adminCall('admin_week', { p_week_start: ws || S.ws || todayStr(), p_shop: S.shop }); S.ws = S.data.week_start; }
+    else {
+      if (S.tab === 'payroll' && !S.me.is_owner) S.tab = 'hours';
+      S.data = await adminCall('admin_week', { p_week_start: ws || S.ws || todayStr(), p_shop: S.shop }); S.ws = S.data.week_start;
+      if (S.tab === 'payroll') S.pay = await adminCall('admin_payroll', { p_week_start: S.ws, p_shop: S.shop });
+    }
     renderAdmin();
   } catch (e) { if (e.message !== '_silent') toast(e.message, true); }
 }
@@ -645,21 +649,21 @@ function empWeek(id) {
 
 function renderAdmin() {
   const t = (k, l) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${l}</button>`;
-  const tabs = `<div class="tabs">${t('hours', 'Hours')}${t('crew', 'Crew')}${t('settings', 'Settings')}</div>`;
+  const tabs = `<div class="tabs">${t('hours', 'Hours')}${S.me.is_owner ? t('payroll', 'Payroll') : ''}${t('crew', 'Crew')}${t('settings', 'Settings')}</div>`;
   const shopbar = (S.tab !== 'settings' && S.shops && S.shops.length > 1)
     ? `<div class="shopbar">${S.shops.map((x) => `<button data-shop="${x.id}" class="${x.id === S.shop ? 'on' : ''}">${esc(x.name)}</button>`).join('')}</div>` : '';
   const role = S.me.is_owner ? 'Owner' : 'Manager';
   const head = headHTML(S.me.name && S.me.name.toLowerCase() !== role.toLowerCase() ? `${role} · ${S.me.name}` : role,
     S.tab === 'settings' ? 'Office <span class="acc">Settings</span>' : `<span class="acc">${esc(shopName(S.shop) || C.SHOP_NAME)}</span>`,
     '<button class="btn sm ghost" id="logout">Sign out</button>', S.tab === 'settings' ? LOGO : logoFor(shopName(S.shop)));
-  app.innerHTML = head + shopbar + tabs + (S.tab === 'crew' ? crewHTML() : S.tab === 'settings' ? settingsHTML() : hoursHTML());
+  app.innerHTML = head + shopbar + tabs + (S.tab === 'crew' ? crewHTML() : S.tab === 'settings' ? settingsHTML() : S.tab === 'payroll' ? payrollHTML() : hoursHTML());
   app.querySelectorAll('[data-tab]').forEach((b) => b.onclick = () => { S.tab = b.dataset.tab; loadAdmin(); });
   app.querySelectorAll('[data-shop]').forEach((b) => b.onclick = () => { S.shop = b.dataset.shop; ls.set('tc_shop', S.shop); loadAdmin(); });
   document.getElementById('logout').onclick = async () => {
     try { await rpc('admin_logout', { p_tok: S.adminTok }); } catch (_) {}
     ls.del('tc_admin'); S.adminTok = null; S.me = null; S.shops = null; adminLogin();
   };
-  S.tab === 'crew' ? wireCrew() : S.tab === 'settings' ? wireSettings() : wireHours();
+  S.tab === 'crew' ? wireCrew() : S.tab === 'settings' ? wireSettings() : S.tab === 'payroll' ? wirePayroll() : wireHours();
 }
 
 function hoursHTML() {
@@ -756,6 +760,159 @@ function exportCSV() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `timecards_${(shop || 'shop').replace(/[^A-Za-z0-9]+/g, '-')}_${ws}_to_${we}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+// ---------- payroll (owner logins only) ----------
+const PAY_TYPES = { hourly: 'Hourly (W-2)', salary: 'Salary', c_hourly: '1099 – hourly', c_flat: '1099 – flat per week' };
+const RATE_LABEL = { hourly: 'Hourly rate', salary: 'Salary per week', c_hourly: 'Hourly rate', c_flat: 'Flat amount per week' };
+const money = (n) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const cents = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+// Gross pay for one employee this week. Hours are the time-card hours rounded to 2 decimals (same as the Hours tab).
+function payCalc(id, over) {
+  const set = Object.assign({ pay_type: 'hourly', rate: 0, commission_type: 'none', commission_pct: 0 }, (S.pay.settings || {})[id], over && over.set);
+  const wk = Object.assign({ sales: 0, commission_amt: 0, other_amt: 0, note: '' }, (S.pay.weeks || {})[id], over && over.wk);
+  const w = empWeek(id);
+  const h = Number(hrs(w.total)), rate = Number(set.rate) || 0;
+  let reg = 0, ot = 0, base = 0, otPay = 0;
+  if (set.pay_type === 'hourly') { reg = Math.min(h, 40); ot = Math.max(0, cents(h - 40)); base = cents(reg * rate); otPay = cents(ot * rate * 1.5); }
+  else if (set.pay_type === 'c_hourly') { reg = h; base = cents(h * rate); }
+  else { reg = h; base = cents(rate); }
+  const comm = set.commission_type === 'percent' ? cents((Number(wk.sales) || 0) * (Number(set.commission_pct) || 0) / 100)
+    : set.commission_type === 'flat' ? cents(wk.commission_amt) : 0;
+  const other = cents(wk.other_amt);
+  return { set, wk, h, reg, ot, base, otPay, comm, other, gross: cents(base + otPay + comm + other), open: w.open, noRate: !(rate > 0) };
+}
+
+function payrollHTML() {
+  const d = S.data, ws = S.ws;
+  let total = 0, missing = 0, open = 0;
+  const rows = d.employees.map((e) => {
+    const c = payCalc(e.id); total += c.gross; if (c.noRate) missing++; if (c.open) open++;
+    const rateTxt = c.noRate ? '<span class="pill no">Set pay rate</span>'
+      : `${esc(PAY_TYPES[c.set.pay_type])} · ${money(Number(c.set.rate))}${/hourly/.test(c.set.pay_type) ? '/hr' : '/wk'}`;
+    const extra = [c.comm ? `comm ${money(c.comm)}` : '', c.other ? `other ${money(c.other)}` : ''].filter(Boolean).join(' · ');
+    return `<button class="emp" data-pay="${e.id}">
+      <div class="grow"><b>${esc(e.name)}</b>${c.open ? ' <span class="pill on">On the clock</span>' : ''}
+        <div class="small muted" style="margin-top:3px">${rateTxt}</div>
+        <div class="small muted code">${c.h.toFixed(2)} hrs${c.ot ? ` (${c.ot.toFixed(2)} OT)` : ''}${extra ? ' · ' + extra : ''}</div></div>
+      <div class="hrs">${money(c.gross)}<small>gross</small></div><div class="muted">›</div></button>`;
+  }).join('');
+  return `
+    <div class="card">
+      <div class="weekhead">
+        <button class="arrow" id="prev">‹</button>
+        <div class="wtitle"><b>Payroll · ${weekLabel(ws, d.today)}</b><span class="small muted">${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}, ${parseYmd(addDays(ws, 6)).getFullYear()} · paid Friday ${fmtShort(addDays(ws, 11))}</span></div>
+        <button class="arrow" id="next" ${ws >= weekStartOf(d.today) ? 'disabled' : ''}>›</button>
+      </div>
+      <div class="row" style="justify-content:space-between;align-items:baseline;margin:10px 2px 2px">
+        <span class="small muted">Total gross · ${esc(shopName(S.shop))}</span><b style="font-size:24px">${money(total)}</b></div>
+      ${missing ? `<p class="small" style="color:#ff7d33;margin:6px 2px 0">${missing} employee${missing === 1 ? ' has' : 's have'} no pay rate yet. Tap them to set it.</p>` : ''}
+      ${open ? `<p class="small" style="color:#ff7d33;margin:6px 2px 0">${open} still on the clock. Their hours count up to right now.</p>` : ''}
+      <p class="small muted" style="margin:6px 2px 0">Gross pay only, before taxes and deductions. Tap an employee to set their pay or add commission and bonuses.</p>
+    </div>
+    <div class="card" style="padding-top:4px;padding-bottom:4px">${rows || '<p class="muted center">No employees at this shop yet. Add them on the Crew tab.</p>'}</div>
+    <button class="btn block ghost" id="paycsv">⬇︎ Download payroll CSV</button>`;
+}
+
+function wirePayroll() {
+  document.getElementById('prev').onclick = () => loadAdmin(addDays(S.ws, -7));
+  document.getElementById('next').onclick = () => loadAdmin(addDays(S.ws, 7));
+  document.getElementById('paycsv').onclick = exportPayrollCSV;
+  app.querySelectorAll('[data-pay]').forEach((b) => b.onclick = () => openPayDetail(b.dataset.pay));
+}
+
+function openPayDetail(id) {
+  const e = S.data.employees.find((x) => x.id === id);
+  const c0 = payCalc(id), ws = S.ws;
+  const opt = (obj, cur) => Object.entries(obj).map(([k, l]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  openSheet(`
+    <div class="sheethead"><div><h2>${esc(e.name)}</h2><div class="small muted code">${esc(shopName(S.shop))} · ${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))}</div></div><button class="x" id="sx">✕</button></div>
+    <label class="lbl">Pay type</label>
+    <select id="ptype" class="field">${opt(PAY_TYPES, c0.set.pay_type)}</select><div style="height:10px"></div>
+    <label class="lbl" id="ratelbl">${RATE_LABEL[c0.set.pay_type]}</label>
+    <input id="prate" class="field" type="number" inputmode="decimal" min="0" step="0.01" value="${Number(c0.set.rate) || ''}" placeholder="0.00">
+    <div class="small muted" id="ratehint" style="margin:4px 2px 0"></div><div style="height:10px"></div>
+    <label class="lbl">Commission</label>
+    <select id="ctype" class="field">${opt({ none: 'No commission', percent: '% of sales', flat: 'Flat $ each week' }, c0.set.commission_type)}</select>
+    <div id="pctwrap" style="margin-top:10px"><label class="lbl">Commission %</label>
+      <input id="cpct" class="field" type="number" inputmode="decimal" min="0" max="100" step="0.01" value="${Number(c0.set.commission_pct) || ''}" placeholder="e.g. 10"></div>
+    <div style="height:16px"></div>
+    <label class="lbl">This week (${fmtShort(ws)} – ${fmtShort(addDays(ws, 6))})</label>
+    <div id="saleswrap"><label class="small muted">Sales / labor total for commission</label>
+      <input id="wsales" class="field" type="number" inputmode="decimal" min="0" step="0.01" value="${Number(c0.wk.sales) || ''}" placeholder="0.00"><div style="height:8px"></div></div>
+    <div id="cflatwrap"><label class="small muted">Commission $</label>
+      <input id="wcomm" class="field" type="number" inputmode="decimal" step="0.01" value="${Number(c0.wk.commission_amt) || ''}" placeholder="0.00"><div style="height:8px"></div></div>
+    <label class="small muted">Bonus / other $ (use a minus for a deduction)</label>
+    <input id="wother" class="field" type="number" inputmode="decimal" step="0.01" value="${Number(c0.wk.other_amt) || ''}" placeholder="0.00"><div style="height:8px"></div>
+    <label class="small muted">Note</label>
+    <input id="wnote" class="field" value="${esc(c0.wk.note || '')}" placeholder="Optional">
+    <div class="card" id="pbreak" style="margin:14px 0 0;background:rgba(255,255,255,.03)"></div>
+    <div style="height:14px"></div>
+    <button class="btn green block" id="psave">Save</button>`);
+  const sh = document.getElementById('sheet'), $ = (q) => sh.querySelector(q);
+  sh.querySelector('#sx').onclick = closeSheet;
+  const read = () => ({
+    set: { pay_type: $('#ptype').value, rate: Number($('#prate').value) || 0, commission_type: $('#ctype').value, commission_pct: Number($('#cpct').value) || 0 },
+    wk: { sales: Number($('#wsales').value) || 0, commission_amt: Number($('#wcomm').value) || 0, other_amt: Number($('#wother').value) || 0, note: $('#wnote').value },
+  });
+  const draw = () => {
+    const v = read(), c = payCalc(id, v), t = v.set.pay_type;
+    $('#ratelbl').textContent = RATE_LABEL[t];
+    $('#ratehint').textContent = t === 'salary' && v.set.rate ? `= ${money(v.set.rate * 52)} a year` : t === 'hourly' ? 'Overtime pays 1.5× after 40 hours.' : /^c_/.test(t) ? '1099: no overtime, no taxes withheld.' : '';
+    $('#pctwrap').style.display = v.set.commission_type === 'percent' ? '' : 'none';
+    $('#saleswrap').style.display = v.set.commission_type === 'percent' ? '' : 'none';
+    $('#cflatwrap').style.display = v.set.commission_type === 'flat' ? '' : 'none';
+    const line = (l, r) => `<div class="row" style="justify-content:space-between"><span class="small muted">${l}</span><span class="code">${r}</span></div>`;
+    let lines = '';
+    if (t === 'hourly') {
+      lines += line(`Regular ${c.reg.toFixed(2)} h × ${money(v.set.rate)}`, money(c.base));
+      lines += line(`Overtime ${c.ot.toFixed(2)} h × ${money(cents(v.set.rate * 1.5))}`, money(c.otPay));
+    } else if (t === 'c_hourly') lines += line(`${c.h.toFixed(2)} h × ${money(v.set.rate)}`, money(c.base));
+    else lines += line(`${t === 'salary' ? 'Salary' : 'Flat amount'} (${c.h.toFixed(2)} h worked)`, money(c.base));
+    if (v.set.commission_type === 'percent') lines += line(`Commission ${v.set.commission_pct}% of ${money(v.wk.sales)}`, money(c.comm));
+    if (v.set.commission_type === 'flat') lines += line('Commission', money(c.comm));
+    if (c.other) lines += line('Bonus / other', money(c.other));
+    $('#pbreak').innerHTML = lines + `<div style="border-top:1px solid rgba(255,255,255,.12);margin:8px 0"></div>` +
+      `<div class="row" style="justify-content:space-between"><b>Gross pay</b><b style="font-size:20px">${money(c.gross)}</b></div>` +
+      (c.open ? '<div class="small" style="color:#ff7d33;margin-top:6px">Still on the clock. Hours count up to right now.</div>' : '');
+  };
+  sh.querySelectorAll('select,input').forEach((el) => { el.oninput = draw; el.onchange = draw; });
+  draw();
+  $('#psave').onclick = async () => {
+    const v = read(), b = $('#psave');
+    if (v.set.rate < 0) return toast("Pay rate can't be negative.", true);
+    if (v.set.commission_pct > 100) return toast('Commission % must be 100 or less.', true);
+    b.disabled = true;
+    try {
+      await adminCall('admin_set_pay', { p_employee: id, p_pay_type: v.set.pay_type, p_rate: v.set.rate, p_commission_type: v.set.commission_type, p_commission_pct: v.set.commission_pct });
+      await adminCall('admin_set_payroll_week', { p_employee: id, p_week_start: ws, p_sales: v.set.commission_type === 'percent' ? v.wk.sales : 0,
+        p_commission_amt: v.set.commission_type === 'flat' ? v.wk.commission_amt : 0, p_other_amt: v.wk.other_amt, p_note: v.wk.note });
+      closeSheet(); toast(`Saved ${e.name.split(' ')[0]}'s pay ✓`); loadAdmin(ws);
+    } catch (err) { b.disabled = false; if (err.message !== '_silent') toast(err.message, true); }
+  };
+}
+
+function exportPayrollCSV() {
+  const d = S.data, ws = S.ws, we = addDays(ws, 6), shop = shopName(S.shop);
+  const q = (v) => `"${String(v).replace(/"/g, '""')}"`, n2 = (n) => (Number(n) || 0).toFixed(2);
+  const lines = [['Shop', 'Employee', 'Week Start', 'Week End', 'Pay Type', 'Rate', 'Total Hours', 'Regular Hours', 'Overtime Hours',
+    'Base Pay', 'Overtime Pay', 'Commission Type', 'Commission %', 'Sales', 'Commission', 'Bonus/Other', 'Gross Pay', 'Note'].map(q).join(',')];
+  let total = 0;
+  for (const e of d.employees) {
+    const c = payCalc(e.id); total += c.gross;
+    lines.push([shop, e.name, ws, we, PAY_TYPES[c.set.pay_type], n2(c.set.rate), c.h.toFixed(2), c.reg.toFixed(2), c.ot.toFixed(2),
+      n2(c.base), n2(c.otPay), { none: 'None', percent: '% of sales', flat: 'Flat $' }[c.set.commission_type],
+      c.set.commission_type === 'percent' ? c.set.commission_pct : '', c.set.commission_type === 'percent' ? n2(c.wk.sales) : '',
+      n2(c.comm), n2(c.other), n2(c.gross), c.wk.note || ''].map(q).join(','));
+  }
+  lines.push(['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', (Math.round(total * 100) / 100).toFixed(2), ''].map(q).join(','));
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `payroll_${(shop || 'shop').replace(/[^A-Za-z0-9]+/g, '-')}_${ws}_to_${we}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
