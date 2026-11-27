@@ -514,10 +514,10 @@ async function submitWeek() {
       <div class="card" style="margin:0 0 10px;background:rgba(255,255,255,.03)">
         <div class="row" style="align-items:center"><select class="field grow" data-k="${i}">${Object.entries(ADJ_KINDS).map(([k, l]) => `<option value="${k}" ${k === it.kind ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
           <button class="x" data-del="${i}" style="margin-left:6px">✕</button></div>
-        ${adjIsParts(it.kind) ? `<div class="small" style="margin:6px 2px 0;color:${it.kind === 'parts' ? '#ff7d33' : 'var(--green)'}">${it.kind === 'parts' ? 'Personal parts: comes OFF your pay.' : 'Shop parts you paid for: paid BACK to you.'}</div>` : ''}
+        ${adjIsParts(it.kind) ? `<div class="small" style="margin:6px 2px 0;color:${it.kind === 'parts' ? '#ff7d33' : 'var(--green)'}">${it.kind === 'parts' ? 'Personal parts: the full total comes OFF your pay.' : 'Shop parts you paid for: the full total is paid BACK to you.'} Enter the receipt total with tax.</div>` : ''}
         <div class="row" style="margin-top:8px;align-items:center">
           <span class="muted code" style="width:22px;text-align:center">${adjIsHours(it.kind) ? '' : '$'}</span>
-          <input class="field grow" data-a="${i}" type="number" inputmode="decimal" min="0" step="${adjIsHours(it.kind) ? '0.25' : '0.01'}" value="${it.amount}" placeholder="${adjIsHours(it.kind) ? 'Hours, e.g. 1.5' : '0.00'}">
+          <input class="field grow" data-a="${i}" type="number" inputmode="decimal" min="0" step="${adjIsHours(it.kind) ? '0.25' : '0.01'}" value="${it.amount}" placeholder="${adjIsHours(it.kind) ? 'Hours, e.g. 1.5' : adjIsParts(it.kind) ? 'Total with tax' : '0.00'}">
           <span class="muted small" style="margin-left:6px">${adjIsHours(it.kind) ? 'hrs' : ''}</span></div>
         <input class="field" data-n="${i}" style="margin-top:8px" value="${esc(it.note)}" placeholder="${it.kind === 'parts' ? 'What parts? e.g. brake pads for my truck' : it.kind === 'parts_reimb' ? 'What parts, for which job? e.g. hose for the Ford on bay 2' : 'Why? e.g. forgot to clock in Tuesday'}">
       </div>`).join('');
