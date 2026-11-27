@@ -1,0 +1,45 @@
+name: Forgotten clock-out check
+
+on:
+  schedule:
+    # Every night. 01:00 UTC = 8 PM Central in summer (CDT), 02:00 UTC = 8 PM in winter (CST).
+    # The script runs once per night, on the first run at or after 8 PM shop time.
+    # 03:00 UTC is a backup in case GitHub runs late.
+    - cron: '0 1,2,3 * * *'
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: 'Type "out" to run the clock-out check right now'
+        required: true
+        default: out
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        working-directory: push
+        run: npm install --no-save --no-audit --no-fund web-push@3
+      - name: Clock-out check
+        working-directory: push
+        run: node send.mjs
+        env:
+          JOB: clockout
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT || 'mailto:office@example.com' }}
+          KIND: ${{ github.event.inputs.kind }}
+      - name: Keep schedule alive
+        if: always()
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/clockout.yml/enable" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
