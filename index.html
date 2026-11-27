@@ -470,15 +470,17 @@ function openLateClockIn() {
 }
 
 const ADJ_KINDS = {
-  parts: 'Parts I bought (take off my pay)',
+  parts: 'Parts Personal — take off my pay',
+  parts_reimb: 'Parts Shop I paid for out of pocket — pay me back',
   hours_add: 'Hours to add',
   hours_sub: 'Hours to take off',
   add: 'Other money to add',
   deduct: 'Other money to take off',
 };
-const ADJ_SHORT = { parts: 'Parts', hours_add: 'Add hours', hours_sub: 'Take off hours', add: 'Add money', deduct: 'Take off money' };
+const ADJ_SHORT = { parts: 'Parts (personal)', parts_reimb: 'Parts reimbursement', hours_add: 'Add hours', hours_sub: 'Take off hours', add: 'Add money', deduct: 'Take off money' };
 const adjIsHours = (k) => k === 'hours_add' || k === 'hours_sub';
-const adjSign = (k) => (k === 'hours_add' || k === 'add' ? '+' : '−');
+const adjSign = (k) => (k === 'hours_add' || k === 'add' || k === 'parts_reimb' ? '+' : '−');
+const adjIsParts = (k) => k === 'parts' || k === 'parts_reimb';
 const adjAmt = (a) => `${adjSign(a.kind)}${adjIsHours(a.kind) ? Number(a.amount).toFixed(2) + ' hrs' : '$' + Number(a.amount).toFixed(2)}`;
 const ADJ_PILL = { pending: '<span class="pill">Waiting</span>', approved: '<span class="pill ok">✓ Approved</span>', rejected: '<span class="pill no">Not approved</span>' };
 
@@ -512,11 +514,12 @@ async function submitWeek() {
       <div class="card" style="margin:0 0 10px;background:rgba(255,255,255,.03)">
         <div class="row" style="align-items:center"><select class="field grow" data-k="${i}">${Object.entries(ADJ_KINDS).map(([k, l]) => `<option value="${k}" ${k === it.kind ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
           <button class="x" data-del="${i}" style="margin-left:6px">✕</button></div>
+        ${adjIsParts(it.kind) ? `<div class="small" style="margin:6px 2px 0;color:${it.kind === 'parts' ? '#ff7d33' : 'var(--green)'}">${it.kind === 'parts' ? 'Personal parts: comes OFF your pay.' : 'Shop parts you paid for: paid BACK to you.'}</div>` : ''}
         <div class="row" style="margin-top:8px;align-items:center">
           <span class="muted code" style="width:22px;text-align:center">${adjIsHours(it.kind) ? '' : '$'}</span>
           <input class="field grow" data-a="${i}" type="number" inputmode="decimal" min="0" step="${adjIsHours(it.kind) ? '0.25' : '0.01'}" value="${it.amount}" placeholder="${adjIsHours(it.kind) ? 'Hours, e.g. 1.5' : '0.00'}">
           <span class="muted small" style="margin-left:6px">${adjIsHours(it.kind) ? 'hrs' : ''}</span></div>
-        <input class="field" data-n="${i}" style="margin-top:8px" value="${esc(it.note)}" placeholder="${it.kind === 'parts' ? 'What parts? e.g. brake pads for my truck' : 'Why? e.g. forgot to clock in Tuesday'}">
+        <input class="field" data-n="${i}" style="margin-top:8px" value="${esc(it.note)}" placeholder="${it.kind === 'parts' ? 'What parts? e.g. brake pads for my truck' : it.kind === 'parts_reimb' ? 'What parts, for which job? e.g. hose for the Ford on bay 2' : 'Why? e.g. forgot to clock in Tuesday'}">
       </div>`).join('');
     $('#adjhint').textContent = items.length ? `${items.length} item${items.length === 1 ? '' : 's'} will go to the office to approve.` : 'Nothing to add? Just tap Submit.';
     sh.querySelectorAll('[data-k]').forEach((el) => el.onchange = () => { items[el.dataset.k].kind = el.value; draw(); });
@@ -529,7 +532,7 @@ async function submitWeek() {
   $('#adjgo').onclick = async () => {
     for (const it of items) {
       if (!(Number(it.amount) > 0)) return toast('Enter an amount for each item.', true);
-      if (it.kind === 'parts' && !it.note.trim()) return toast('Say what parts you bought.', true);
+      if (adjIsParts(it.kind) && !it.note.trim()) return toast('Say what parts they were.', true);
     }
     const b = $('#adjgo'); b.disabled = true;
     try {
@@ -845,7 +848,7 @@ function payCalc(id, over) {
   const w = empWeek(id);
   const adjs = (S.pay.adjustments || []).filter((a) => a.employee_id === id);
   const ok = adjs.filter((a) => a.status === 'approved'), sumK = (k) => cents(ok.filter((a) => a.kind === k).reduce((t, a) => t + Number(a.amount), 0));
-  const hAdj = cents(sumK('hours_add') - sumK('hours_sub')), parts = sumK('parts'), adjMoney = cents(sumK('add') - sumK('deduct'));
+  const hAdj = cents(sumK('hours_add') - sumK('hours_sub')), parts = sumK('parts'), reimb = sumK('parts_reimb'), adjMoney = cents(sumK('add') - sumK('deduct'));
   const pending = adjs.filter((a) => a.status === 'pending').length;
   const cardH = Number(hrs(w.total)), h = Math.max(0, cents(cardH + hAdj)), rate = Number(set.rate) || 0;
   let reg = 0, ot = 0, base = 0, otPay = 0;
@@ -855,8 +858,8 @@ function payCalc(id, over) {
   const comm = set.commission_type === 'percent' ? cents((Number(wk.sales) || 0) * (Number(set.commission_pct) || 0) / 100)
     : set.commission_type === 'flat' ? cents(wk.commission_amt) : 0;
   const other = cents(wk.other_amt);
-  return { set, wk, h, cardH, hAdj, parts, adjMoney, pending, adjs, reg, ot, base, otPay, comm, other,
-    gross: cents(base + otPay + comm + other + adjMoney - parts), open: w.open, noRate: !(rate > 0) };
+  return { set, wk, h, cardH, hAdj, parts, reimb, adjMoney, pending, adjs, reg, ot, base, otPay, comm, other,
+    gross: cents(base + otPay + comm + other + adjMoney - parts + reimb), open: w.open, noRate: !(rate > 0) };
 }
 
 function payrollHTML() {
@@ -866,7 +869,7 @@ function payrollHTML() {
     const c = payCalc(e.id); total += c.gross; if (c.noRate) missing++; if (c.open) open++; waiting += c.pending;
     const rateTxt = c.noRate ? '<span class="pill no">Set pay rate</span>'
       : `${esc(PAY_TYPES[c.set.pay_type])} · ${money(Number(c.set.rate))}${/hourly/.test(c.set.pay_type) ? '/hr' : '/wk'}`;
-    const extra = [c.hAdj ? `${c.hAdj > 0 ? '+' : ''}${c.hAdj.toFixed(2)} hrs adj` : '', c.parts ? `parts −${money(c.parts)}` : '',
+    const extra = [c.hAdj ? `${c.hAdj > 0 ? '+' : ''}${c.hAdj.toFixed(2)} hrs adj` : '', c.parts ? `parts −${money(c.parts)}` : '', c.reimb ? `reimb +${money(c.reimb)}` : '',
       c.adjMoney ? `adj ${money(c.adjMoney)}` : '', c.comm ? `comm ${money(c.comm)}` : '', c.other ? `other ${money(c.other)}` : ''].filter(Boolean).join(' · ');
     return `<button class="emp" data-pay="${e.id}">
       <div class="grow"><b>${esc(e.name)}</b>${c.open ? ' <span class="pill on">On the clock</span>' : ''}${c.pending ? ` <span class="pill no">${c.pending} to approve</span>` : ''}
@@ -961,7 +964,8 @@ function openPayDetail(id) {
     if (v.set.commission_type === 'flat') lines += line('Commission', money(c.comm));
     if (c.other) lines += line('Bonus / other', money(c.other));
     if (c.adjMoney) lines += line('Approved money changes', money(c.adjMoney));
-    if (c.parts) lines += line('Parts (approved)', '−' + money(c.parts));
+    if (c.parts) lines += line('Parts personal (approved)', '−' + money(c.parts));
+    if (c.reimb) lines += line('Parts reimbursement (approved)', '+' + money(c.reimb));
     if (c.pending) lines += `<div class="small" style="color:#ff7d33;margin-top:4px">${c.pending} pay change${c.pending === 1 ? '' : 's'} waiting. Not counted yet.</div>`;
     $('#pbreak').innerHTML = lines + `<div style="border-top:1px solid rgba(255,255,255,.12);margin:8px 0"></div>` +
       `<div class="row" style="justify-content:space-between"><b>Gross pay</b><b style="font-size:20px">${money(c.gross)}</b></div>` +
@@ -998,18 +1002,18 @@ function exportPayrollCSV() {
   const d = S.data, ws = S.ws, we = addDays(ws, 6), shop = shopName(S.shop);
   const q = (v) => `"${String(v).replace(/"/g, '""')}"`, n2 = (n) => (Number(n) || 0).toFixed(2);
   const lines = [['Shop', 'Employee', 'Week Start', 'Week End', 'Pay Type', 'Rate', 'Total Hours', 'Regular Hours', 'Overtime Hours',
-    'Base Pay', 'Overtime Pay', 'Commission Type', 'Commission %', 'Sales', 'Commission', 'Bonus/Other', 'Hours Adjustment', 'Parts Deduction', 'Other Pay Changes', 'Gross Pay', 'Note', 'Pay Changes Waiting'].map(q).join(',')];
+    'Base Pay', 'Overtime Pay', 'Commission Type', 'Commission %', 'Sales', 'Commission', 'Bonus/Other', 'Hours Adjustment', 'Parts Deduction', 'Reimbursement', 'Other Pay Changes', 'Gross Pay', 'Note', 'Pay Changes Waiting'].map(q).join(',')];
   let total = 0;
   for (const e of d.employees) {
     const c = payCalc(e.id); total += c.gross;
     lines.push([shop, e.name, ws, we, PAY_TYPES[c.set.pay_type], n2(c.set.rate), c.h.toFixed(2), c.reg.toFixed(2), c.ot.toFixed(2),
       n2(c.base), n2(c.otPay), { none: 'None', percent: '% of sales', flat: 'Flat $' }[c.set.commission_type],
       c.set.commission_type === 'percent' ? c.set.commission_pct : '', c.set.commission_type === 'percent' ? n2(c.wk.sales) : '',
-      n2(c.comm), n2(c.other), n2(c.hAdj), n2(c.parts ? -c.parts : 0), n2(c.adjMoney), n2(c.gross),
+      n2(c.comm), n2(c.other), n2(c.hAdj), n2(c.parts ? -c.parts : 0), n2(c.reimb), n2(c.adjMoney), n2(c.gross),
       [c.wk.note || ''].concat(c.adjs.filter((a) => a.status === 'approved').map((a) => `${ADJ_SHORT[a.kind]} ${adjAmt(a)}${a.note ? ' (' + a.note + ')' : ''}`)).filter(Boolean).join('; '),
       c.pending || ''].map(q).join(','));
   }
-  lines.push(['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', (Math.round(total * 100) / 100).toFixed(2), '', ''].map(q).join(','));
+  lines.push(['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', (Math.round(total * 100) / 100).toFixed(2), '', ''].map(q).join(','));
   const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
