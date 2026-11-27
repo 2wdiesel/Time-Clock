@@ -392,7 +392,14 @@ function renderEmp() {
       ${days}
       ${submit}
     </div>
+    ${(d.adjustments || []).length ? `<div class="card"><label class="lbl">Pay changes this week</label>${adjListHTML(d.adjustments, true)}</div>` : ''}
     <p class="center small muted">Forgot to clock in or out? Tap the day to type in your times.</p>`;
+
+  app.querySelectorAll('[data-adjrm]').forEach((b) => b.onclick = async () => {
+    if (!confirm('Remove this pay change request?')) return;
+    try { await rpc('emp_remove_adjustment', { p_token: S.token, p_id: b.dataset.adjrm }); toast('Removed'); loadEmp(); }
+    catch (e) { toast(e.message, true); }
+  });
 
   document.getElementById('clockbtn').onclick = clockToggle;
   const lb = document.getElementById('latebtn'); if (lb) lb.onclick = openLateClockIn;
@@ -462,14 +469,75 @@ function openLateClockIn() {
   };
 }
 
+const ADJ_KINDS = {
+  parts: 'Parts I bought (take off my pay)',
+  hours_add: 'Hours to add',
+  hours_sub: 'Hours to take off',
+  add: 'Other money to add',
+  deduct: 'Other money to take off',
+};
+const ADJ_SHORT = { parts: 'Parts', hours_add: 'Add hours', hours_sub: 'Take off hours', add: 'Add money', deduct: 'Take off money' };
+const adjIsHours = (k) => k === 'hours_add' || k === 'hours_sub';
+const adjSign = (k) => (k === 'hours_add' || k === 'add' ? '+' : '−');
+const adjAmt = (a) => `${adjSign(a.kind)}${adjIsHours(a.kind) ? Number(a.amount).toFixed(2) + ' hrs' : '$' + Number(a.amount).toFixed(2)}`;
+const ADJ_PILL = { pending: '<span class="pill">Waiting</span>', approved: '<span class="pill ok">✓ Approved</span>', rejected: '<span class="pill no">Not approved</span>' };
+
+function adjListHTML(list, canRemove) {
+  if (!list || !list.length) return '';
+  return list.map((a) => `<div class="row" style="align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)">
+      <div class="grow"><b>${esc(ADJ_SHORT[a.kind])}</b> <span class="code">${adjAmt(a)}</span>
+        ${a.note ? `<div class="small muted">${esc(a.note)}</div>` : ''}</div>
+      ${ADJ_PILL[a.status] || ''}
+      ${canRemove && a.status === 'pending' ? `<button class="btn sm ghost" data-adjrm="${a.id}" style="margin-left:6px">Remove</button>` : ''}
+    </div>`).join('');
+}
+
 async function submitWeek() {
   const d = S.data;
   const total = hrs(sumMins(d.punches));
-  if (!confirm(`Submit ${total} hours for ${fmtShort(S.ws)} – ${fmtShort(addDays(S.ws, 6))}?`)) return;
-  try {
-    await rpc('emp_submit_week', { p_token: S.token, p_week_start: S.ws });
-    toast('Submitted ✓'); loadEmp();
-  } catch (e) { toast(e.message, true); }
+  const items = [];
+  openSheet(`
+    <div class="sheethead"><div><h2>Submit week</h2><div class="small muted code">${fmtShort(S.ws)} – ${fmtShort(addDays(S.ws, 6))} · ${total} hrs</div></div><button class="x" id="sx">✕</button></div>
+    <label class="lbl">Anything to add or take off your pay?</label>
+    <p class="small muted" style="margin:0 0 10px">Parts you bought from the shop, hours that are missing or extra, or anything else. The office will approve it.</p>
+    <div id="adjrows"></div>
+    <button class="btn block ghost" id="adjadd">+ Add parts or a pay change</button>
+    <div style="height:16px"></div>
+    <button class="btn green block" id="adjgo">Submit ${total} hrs</button>
+    <p class="small muted center" style="margin:8px 0 0" id="adjhint">Nothing to add? Just tap Submit.</p>`);
+  const sh = document.getElementById('sheet'), $ = (q) => sh.querySelector(q);
+  $('#sx').onclick = closeSheet;
+  const draw = () => {
+    $('#adjrows').innerHTML = items.map((it, i) => `
+      <div class="card" style="margin:0 0 10px;background:rgba(255,255,255,.03)">
+        <div class="row" style="align-items:center"><select class="field grow" data-k="${i}">${Object.entries(ADJ_KINDS).map(([k, l]) => `<option value="${k}" ${k === it.kind ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+          <button class="x" data-del="${i}" style="margin-left:6px">✕</button></div>
+        <div class="row" style="margin-top:8px;align-items:center">
+          <span class="muted code" style="width:22px;text-align:center">${adjIsHours(it.kind) ? '' : '$'}</span>
+          <input class="field grow" data-a="${i}" type="number" inputmode="decimal" min="0" step="${adjIsHours(it.kind) ? '0.25' : '0.01'}" value="${it.amount}" placeholder="${adjIsHours(it.kind) ? 'Hours, e.g. 1.5' : '0.00'}">
+          <span class="muted small" style="margin-left:6px">${adjIsHours(it.kind) ? 'hrs' : ''}</span></div>
+        <input class="field" data-n="${i}" style="margin-top:8px" value="${esc(it.note)}" placeholder="${it.kind === 'parts' ? 'What parts? e.g. brake pads for my truck' : 'Why? e.g. forgot to clock in Tuesday'}">
+      </div>`).join('');
+    $('#adjhint').textContent = items.length ? `${items.length} item${items.length === 1 ? '' : 's'} will go to the office to approve.` : 'Nothing to add? Just tap Submit.';
+    sh.querySelectorAll('[data-k]').forEach((el) => el.onchange = () => { items[el.dataset.k].kind = el.value; draw(); });
+    sh.querySelectorAll('[data-a]').forEach((el) => el.oninput = () => { items[el.dataset.a].amount = el.value; });
+    sh.querySelectorAll('[data-n]').forEach((el) => el.oninput = () => { items[el.dataset.n].note = el.value; });
+    sh.querySelectorAll('[data-del]').forEach((el) => el.onclick = () => { items.splice(Number(el.dataset.del), 1); draw(); });
+  };
+  $('#adjadd').onclick = () => { if (items.length >= 10) return toast('Up to 10 items at a time.', true); items.push({ kind: 'parts', amount: '', note: '' }); draw(); };
+  draw();
+  $('#adjgo').onclick = async () => {
+    for (const it of items) {
+      if (!(Number(it.amount) > 0)) return toast('Enter an amount for each item.', true);
+      if (it.kind === 'parts' && !it.note.trim()) return toast('Say what parts you bought.', true);
+    }
+    const b = $('#adjgo'); b.disabled = true;
+    try {
+      await rpc('emp_submit_week_adj', { p_token: S.token, p_week_start: S.ws,
+        p_items: items.map((it) => ({ kind: it.kind, amount: Number(it.amount), note: it.note.trim() })) });
+      closeSheet(); toast(items.length ? 'Submitted ✓ Sent to the office to approve' : 'Submitted ✓'); loadEmp();
+    } catch (e) { b.disabled = false; toast(e.message, true); }
+  };
 }
 
 // ---------- push notifications ----------
@@ -775,7 +843,11 @@ function payCalc(id, over) {
   const set = Object.assign({ pay_type: 'hourly', rate: 0, commission_type: 'none', commission_pct: 0 }, (S.pay.settings || {})[id], over && over.set);
   const wk = Object.assign({ sales: 0, commission_amt: 0, other_amt: 0, note: '' }, (S.pay.weeks || {})[id], over && over.wk);
   const w = empWeek(id);
-  const h = Number(hrs(w.total)), rate = Number(set.rate) || 0;
+  const adjs = (S.pay.adjustments || []).filter((a) => a.employee_id === id);
+  const ok = adjs.filter((a) => a.status === 'approved'), sumK = (k) => cents(ok.filter((a) => a.kind === k).reduce((t, a) => t + Number(a.amount), 0));
+  const hAdj = cents(sumK('hours_add') - sumK('hours_sub')), parts = sumK('parts'), adjMoney = cents(sumK('add') - sumK('deduct'));
+  const pending = adjs.filter((a) => a.status === 'pending').length;
+  const cardH = Number(hrs(w.total)), h = Math.max(0, cents(cardH + hAdj)), rate = Number(set.rate) || 0;
   let reg = 0, ot = 0, base = 0, otPay = 0;
   if (set.pay_type === 'hourly') { reg = Math.min(h, 40); ot = Math.max(0, cents(h - 40)); base = cents(reg * rate); otPay = cents(ot * rate * 1.5); }
   else if (set.pay_type === 'c_hourly') { reg = h; base = cents(h * rate); }
@@ -783,19 +855,21 @@ function payCalc(id, over) {
   const comm = set.commission_type === 'percent' ? cents((Number(wk.sales) || 0) * (Number(set.commission_pct) || 0) / 100)
     : set.commission_type === 'flat' ? cents(wk.commission_amt) : 0;
   const other = cents(wk.other_amt);
-  return { set, wk, h, reg, ot, base, otPay, comm, other, gross: cents(base + otPay + comm + other), open: w.open, noRate: !(rate > 0) };
+  return { set, wk, h, cardH, hAdj, parts, adjMoney, pending, adjs, reg, ot, base, otPay, comm, other,
+    gross: cents(base + otPay + comm + other + adjMoney - parts), open: w.open, noRate: !(rate > 0) };
 }
 
 function payrollHTML() {
   const d = S.data, ws = S.ws;
-  let total = 0, missing = 0, open = 0;
+  let total = 0, missing = 0, open = 0, waiting = 0;
   const rows = d.employees.map((e) => {
-    const c = payCalc(e.id); total += c.gross; if (c.noRate) missing++; if (c.open) open++;
+    const c = payCalc(e.id); total += c.gross; if (c.noRate) missing++; if (c.open) open++; waiting += c.pending;
     const rateTxt = c.noRate ? '<span class="pill no">Set pay rate</span>'
       : `${esc(PAY_TYPES[c.set.pay_type])} · ${money(Number(c.set.rate))}${/hourly/.test(c.set.pay_type) ? '/hr' : '/wk'}`;
-    const extra = [c.comm ? `comm ${money(c.comm)}` : '', c.other ? `other ${money(c.other)}` : ''].filter(Boolean).join(' · ');
+    const extra = [c.hAdj ? `${c.hAdj > 0 ? '+' : ''}${c.hAdj.toFixed(2)} hrs adj` : '', c.parts ? `parts −${money(c.parts)}` : '',
+      c.adjMoney ? `adj ${money(c.adjMoney)}` : '', c.comm ? `comm ${money(c.comm)}` : '', c.other ? `other ${money(c.other)}` : ''].filter(Boolean).join(' · ');
     return `<button class="emp" data-pay="${e.id}">
-      <div class="grow"><b>${esc(e.name)}</b>${c.open ? ' <span class="pill on">On the clock</span>' : ''}
+      <div class="grow"><b>${esc(e.name)}</b>${c.open ? ' <span class="pill on">On the clock</span>' : ''}${c.pending ? ` <span class="pill no">${c.pending} to approve</span>` : ''}
         <div class="small muted" style="margin-top:3px">${rateTxt}</div>
         <div class="small muted code">${c.h.toFixed(2)} hrs${c.ot ? ` (${c.ot.toFixed(2)} OT)` : ''}${extra ? ' · ' + extra : ''}</div></div>
       <div class="hrs">${money(c.gross)}<small>gross</small></div><div class="muted">›</div></button>`;
@@ -811,6 +885,7 @@ function payrollHTML() {
         <span class="small muted">Total gross · ${esc(shopName(S.shop))}</span><b style="font-size:24px">${money(total)}</b></div>
       ${missing ? `<p class="small" style="color:#ff7d33;margin:6px 2px 0">${missing} employee${missing === 1 ? ' has' : 's have'} no pay rate yet. Tap them to set it.</p>` : ''}
       ${open ? `<p class="small" style="color:#ff7d33;margin:6px 2px 0">${open} still on the clock. Their hours count up to right now.</p>` : ''}
+      ${waiting ? `<p class="small" style="color:#ff7d33;margin:6px 2px 0">${waiting} pay change${waiting === 1 ? '' : 's'} waiting for approval. They don't count until approved. Tap the employee.</p>` : ''}
       <p class="small muted" style="margin:6px 2px 0">Gross pay only, before taxes and deductions. Tap an employee to set their pay or add commission and bonuses.</p>
     </div>
     <div class="card" style="padding-top:4px;padding-bottom:4px">${rows || '<p class="muted center">No employees at this shop yet. Add them on the Crew tab.</p>'}</div>
@@ -849,6 +924,15 @@ function openPayDetail(id) {
     <input id="wother" class="field" type="number" inputmode="decimal" step="0.01" value="${Number(c0.wk.other_amt) || ''}" placeholder="0.00"><div style="height:8px"></div>
     <label class="small muted">Note</label>
     <input id="wnote" class="field" value="${esc(c0.wk.note || '')}" placeholder="Optional">
+    ${c0.adjs.length ? `<div style="height:16px"></div><label class="lbl">Pay changes ${esc(e.name.split(' ')[0])} sent in</label>
+      ${c0.adjs.map((a) => `<div class="row" style="align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)">
+        <div class="grow"><b>${esc(ADJ_SHORT[a.kind])}</b> <span class="code">${adjAmt(a)}</span>
+          ${a.note ? `<div class="small muted">${esc(a.note)}</div>` : ''}
+          ${a.status !== 'pending' && a.decided_by ? `<div class="small muted">${a.status === 'approved' ? 'Approved' : 'Rejected'} by ${esc(a.decided_by)}</div>` : ''}</div>
+        ${a.status === 'pending'
+          ? `<button class="btn sm green" data-adjok="${a.id}">Approve</button><button class="btn sm ghost" data-adjno="${a.id}" style="margin-left:6px">Reject</button>`
+          : `${ADJ_PILL[a.status]}<button class="btn sm ghost" data-adjundo="${a.id}" style="margin-left:6px">Undo</button>`}
+      </div>`).join('')}` : ''}
     <div class="card" id="pbreak" style="margin:14px 0 0;background:rgba(255,255,255,.03)"></div>
     <div style="height:14px"></div>
     <button class="btn green block" id="psave">Save</button>`);
@@ -867,6 +951,7 @@ function openPayDetail(id) {
     $('#cflatwrap').style.display = v.set.commission_type === 'flat' ? '' : 'none';
     const line = (l, r) => `<div class="row" style="justify-content:space-between"><span class="small muted">${l}</span><span class="code">${r}</span></div>`;
     let lines = '';
+    if (c.hAdj) lines += line(`Hours: ${c.cardH.toFixed(2)} on time cards ${c.hAdj > 0 ? '+' : '−'} ${Math.abs(c.hAdj).toFixed(2)} approved`, `${c.h.toFixed(2)} h`);
     if (t === 'hourly') {
       lines += line(`Regular ${c.reg.toFixed(2)} h × ${money(v.set.rate)}`, money(c.base));
       lines += line(`Overtime ${c.ot.toFixed(2)} h × ${money(cents(v.set.rate * 1.5))}`, money(c.otPay));
@@ -875,12 +960,26 @@ function openPayDetail(id) {
     if (v.set.commission_type === 'percent') lines += line(`Commission ${v.set.commission_pct}% of ${money(v.wk.sales)}`, money(c.comm));
     if (v.set.commission_type === 'flat') lines += line('Commission', money(c.comm));
     if (c.other) lines += line('Bonus / other', money(c.other));
+    if (c.adjMoney) lines += line('Approved money changes', money(c.adjMoney));
+    if (c.parts) lines += line('Parts (approved)', '−' + money(c.parts));
+    if (c.pending) lines += `<div class="small" style="color:#ff7d33;margin-top:4px">${c.pending} pay change${c.pending === 1 ? '' : 's'} waiting. Not counted yet.</div>`;
     $('#pbreak').innerHTML = lines + `<div style="border-top:1px solid rgba(255,255,255,.12);margin:8px 0"></div>` +
       `<div class="row" style="justify-content:space-between"><b>Gross pay</b><b style="font-size:20px">${money(c.gross)}</b></div>` +
       (c.open ? '<div class="small" style="color:#ff7d33;margin-top:6px">Still on the clock. Hours count up to right now.</div>' : '');
   };
   sh.querySelectorAll('select,input').forEach((el) => { el.oninput = draw; el.onchange = draw; });
   draw();
+  const decide = (aid, st) => async () => {
+    try {
+      await adminCall('admin_decide_adjustment', { p_id: aid, p_status: st });
+      const a = S.pay.adjustments.find((x) => x.id === aid); a.status = st; a.decided_by = st === 'pending' ? null : S.me.name;
+      toast(st === 'approved' ? 'Approved ✓' : st === 'rejected' ? 'Rejected' : 'Back to waiting');
+      renderAdmin(); openPayDetail(id);
+    } catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+  };
+  sh.querySelectorAll('[data-adjok]').forEach((b) => b.onclick = decide(b.dataset.adjok, 'approved'));
+  sh.querySelectorAll('[data-adjno]').forEach((b) => b.onclick = decide(b.dataset.adjno, 'rejected'));
+  sh.querySelectorAll('[data-adjundo]').forEach((b) => b.onclick = decide(b.dataset.adjundo, 'pending'));
   $('#psave').onclick = async () => {
     const v = read(), b = $('#psave');
     if (v.set.rate < 0) return toast("Pay rate can't be negative.", true);
@@ -899,16 +998,18 @@ function exportPayrollCSV() {
   const d = S.data, ws = S.ws, we = addDays(ws, 6), shop = shopName(S.shop);
   const q = (v) => `"${String(v).replace(/"/g, '""')}"`, n2 = (n) => (Number(n) || 0).toFixed(2);
   const lines = [['Shop', 'Employee', 'Week Start', 'Week End', 'Pay Type', 'Rate', 'Total Hours', 'Regular Hours', 'Overtime Hours',
-    'Base Pay', 'Overtime Pay', 'Commission Type', 'Commission %', 'Sales', 'Commission', 'Bonus/Other', 'Gross Pay', 'Note'].map(q).join(',')];
+    'Base Pay', 'Overtime Pay', 'Commission Type', 'Commission %', 'Sales', 'Commission', 'Bonus/Other', 'Hours Adjustment', 'Parts Deduction', 'Other Pay Changes', 'Gross Pay', 'Note', 'Pay Changes Waiting'].map(q).join(',')];
   let total = 0;
   for (const e of d.employees) {
     const c = payCalc(e.id); total += c.gross;
     lines.push([shop, e.name, ws, we, PAY_TYPES[c.set.pay_type], n2(c.set.rate), c.h.toFixed(2), c.reg.toFixed(2), c.ot.toFixed(2),
       n2(c.base), n2(c.otPay), { none: 'None', percent: '% of sales', flat: 'Flat $' }[c.set.commission_type],
       c.set.commission_type === 'percent' ? c.set.commission_pct : '', c.set.commission_type === 'percent' ? n2(c.wk.sales) : '',
-      n2(c.comm), n2(c.other), n2(c.gross), c.wk.note || ''].map(q).join(','));
+      n2(c.comm), n2(c.other), n2(c.hAdj), n2(c.parts ? -c.parts : 0), n2(c.adjMoney), n2(c.gross),
+      [c.wk.note || ''].concat(c.adjs.filter((a) => a.status === 'approved').map((a) => `${ADJ_SHORT[a.kind]} ${adjAmt(a)}${a.note ? ' (' + a.note + ')' : ''}`)).filter(Boolean).join('; '),
+      c.pending || ''].map(q).join(','));
   }
-  lines.push(['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', (Math.round(total * 100) / 100).toFixed(2), ''].map(q).join(','));
+  lines.push(['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', (Math.round(total * 100) / 100).toFixed(2), '', ''].map(q).join(','));
   const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1142,6 +1243,11 @@ function settingsHTML() {
       ${logins}
     </div>
     <div class="card">
+      <label class="lbl">Forgotten clock-out alerts</label>
+      <p class="small muted" style="margin:0 0 8px">Every night at 8 PM, anyone still clocked in gets a reminder on their phone, and this email gets a list of who's still on the clock. Leave it blank to stop the emails.</p>
+      <div class="row"><input id="alertto" class="field grow" type="email" placeholder="Loading…" autocomplete="off" autocapitalize="off"><button class="btn green" id="alertsave">Save</button></div>
+    </div>
+    <div class="card">
       <label class="lbl">Add an office login</label>
       <input id="ln" class="field" placeholder="Name (e.g. Ken)" autocomplete="off"><div style="height:8px"></div>
       <input id="lu" class="field" placeholder="Username" autocapitalize="off" autocorrect="off" autocomplete="off"><div style="height:8px"></div>
@@ -1262,6 +1368,15 @@ function wireSettings() {
     try { await adminCall('admin_add_clock', { p_id: S.me.id, p_shop: S.shop }); S.me = null; toast('Time clock added ✓'); await loadAdmin(); }
     catch (err) { if (err.message !== '_silent') toast(err.message, true); }
   };
+  const alertTo = document.getElementById('alertto');
+  if (alertTo) {
+    adminCall('admin_alert_email', {}).then((v) => { alertTo.value = v || ''; alertTo.placeholder = 'Email for the 8 PM list'; })
+      .catch(() => { alertTo.placeholder = 'Email for the 8 PM list'; });
+    document.getElementById('alertsave').onclick = async () => {
+      try { await adminCall('admin_set_alert_email', { p_email: alertTo.value }); toast(alertTo.value.trim() ? 'Alert email saved ✓' : 'Alert emails turned off'); }
+      catch (err) { if (err.message !== '_silent') toast(err.message, true); }
+    };
+  }
   app.querySelectorAll('[data-ledit]').forEach((b) => b.onclick = () => openLoginEdit(b.dataset.ledit));
   app.querySelectorAll('[data-lreset]').forEach((b) => b.onclick = () => {
     const a = find(b.dataset.lreset); const pw = prompt(`New password for ${a.name} (6+ characters):`);
