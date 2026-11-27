@@ -274,7 +274,7 @@ function codeScreen(msg) {
     ${headHTML(C.SHOP_NAME, 'Time <span class="acc">Clock</span>')}
     <div class="card">
       <h2 style="margin-top:0">Enter your code</h2>
-      <p class="muted small">Open the link the office emailed you, or type the code from it here.</p>
+      <p class="muted small">It's in your invite email, on the line that says "Your code". Or just tap the link in that email.</p>
       ${msg ? `<p style="color:var(--red)">${esc(msg)}</p>` : ''}
       <input id="code" class="field code" autocomplete="off" autocapitalize="off" placeholder="e.g. 3fa9c21b7e">
       <div style="height:12px"></div>
@@ -1032,6 +1032,7 @@ function inviteText(e) {
   let t = `Hi ${e.name.split(' ')[0]},`;
   if (e.token) {
     t += ` here's your ${shop} time clock link. Open this email on your phone and tap it:\n${linkFor(e.token)}\n\n` +
+      `Your code: ${e.token}\n(If the app ever asks "Enter your code", type this in.)\n\n` +
       `iPhone: open it in Safari, tap Share ⬆︎ → "Add to Home Screen", then open it from your Home Screen and tap "Turn on reminders".\n` +
       `Android: open it in Chrome, tap "Install" (or ⋮ menu → Add to Home screen) and tap "Turn on reminders".`;
   }
